@@ -1,0 +1,18 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+asyncio_mode = "auto"
+
+# Le pool asyncpg et le conteneur TimescaleDB sont portes par des fixtures de
+# session: sans ces deux reglages, pytest-asyncio ouvre une boucle par test et
+# les connexions du pool, liees a la boucle de creation, deviennent inutilisables.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+
+markers = [
+    "integration: necessite le conteneur TimescaleDB (docker requis)",
+]
+
+filterwarnings = [
+    "ignore::DeprecationWarning:testcontainers.*",
+]

@@ -1,0 +1,9 @@
+chauff-cmn>=0.3.0
+aiofiles
+asyncpg
+pydantic
+pydantic_settings
+pytest
+pytest_asyncio
+pytest-cov
+testcontainers

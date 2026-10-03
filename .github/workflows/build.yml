@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [ "**" ]
+    tags: [ "v*.*.*" ]
+  pull_request:
+
+
+jobs:
+  test:
+    uses: Les-Chauffagistes/deploy/.github/workflows/test.yml@678d0d8997838fd5b45db433926d92c1e56d80ce
+    with:
+      python-version: '3.13'
+    secrets: inherit
+
+
+  build-push:
+    if: github.event_name == 'push'
+    needs: test
+    uses: Les-Chauffagistes/deploy/.github/workflows/build.yml@f2251700b5b235a3965d6bb793a63e63cd43e673
+    with:
+      service-name: ckpool-share-exporter
+    secrets:
+      REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+      VERDACCIO_PASSWORD: ${{ secrets.VERDACCIO_PASSWORD }}
+      PYPISERVER_PASSWORD: ${{ secrets.PYPISERVER_PASSWORD }}
+      ORG_PAT: ${{ secrets.ORG_PAT }}

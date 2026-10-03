@@ -1,0 +1,21 @@
+{
+  "workinfoid": 7688470228434424839,
+  "clientid": 261993006639,
+  "enonce1": "e3f0b26a",
+  "nonce2": "0000000000000000",
+  "nonce": "5746a9bf",
+  "ntime": "6ab54a4b",
+  "diff": 2428.0,
+  "sdiff": 12712.6266243305,
+  "hash": "00000000000527b558f828a4b46bcc4f091e34c01124eb8046dbaa20c91ad70f",
+  "result": true,
+  "errn": 0,
+  "createdate": "1790265931,909600425",
+  "createby": "code",
+  "createcode": "parse_submit",
+  "createinet": "0.0.0.0:3333",
+  "workername": "bc1qqp9zq4an6nyzhcspz2xfmkcf8rj0p6w94a5gyeu2a7rghxjhnqqsvymz5m.GeeBeeCryptos",
+  "username": "bc1qqp9zq4an6nyzhcspz2xfmkcf8rj0p6w94a5gyeu2a7rghxjhnqqsvymz5m",
+  "address": "90.22.108.150",
+  "agent": "bitaxe/BM1370/v2.15.1"
+}

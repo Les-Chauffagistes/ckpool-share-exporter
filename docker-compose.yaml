@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    env_file:
+      .env
+
+  db:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: ckpool
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ckpool
+    ports:
+      - "5432:5432"
