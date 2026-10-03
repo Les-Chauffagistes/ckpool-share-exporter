@@ -1,6 +1,6 @@
-"""Ingestion des sharelogs de bout en bout (workers.share_ingestor.worker_B).
+"""Ingestion des sharelogs de bout en bout (workers.share_ingestor.ingest_sharelogs).
 
-Chaque test passe par worker_A pour enregistrer les fichiers, comme en
+Chaque test passe par register_new_sharelogs pour enregistrer les fichiers, comme en
 production.
 """
 
@@ -11,13 +11,13 @@ import pytest
 
 import ckpool_share_exporter.workers.share_ingestor as ingestor
 from ckpool_share_exporter.dao import ShareWeightDAO
-from ckpool_share_exporter.workers.file_explorer import worker_A
-from ckpool_share_exporter.workers.share_ingestor import worker_B
+from ckpool_share_exporter.workers.file_explorer import register_new_sharelogs
+from ckpool_share_exporter.workers.share_ingestor import ingest_sharelogs
 from tests.helpers import (
     ADDRESS_A, ADDRESS_B, append_sharelog, line, set_mtime, worker_name, write_sharelog,
 )
 
-# mtime entier: la comparaison (mtime, size) de worker_B passe par
+# mtime entier: la comparaison (mtime, size) de ingest_sharelogs passe par
 # datetime.fromtimestamp, et un mtime entier ecarte toute question d'arrondi.
 _MTIME = float(int(time.time()))
 
@@ -29,8 +29,8 @@ def sharelog(directory, lines, *, name = "0.sharelog", final_newline = True, mti
 
 
 async def ingest(pg):
-    await worker_A(pg)
-    await worker_B(pg)
+    await register_new_sharelogs(pg)
+    await ingest_sharelogs(pg)
 
 
 async def weights_of(pg, pool_instance):
@@ -142,8 +142,8 @@ async def test_an_unchanged_file_is_not_read_again(pg, round_dir, pool_instance,
     await ingest(pg)
     assert len(aggregate_calls) == 1
 
-    await worker_B(pg)
-    await worker_B(pg)
+    await ingest_sharelogs(pg)
+    await ingest_sharelogs(pg)
 
     assert len(aggregate_calls) == 1
 
@@ -158,9 +158,9 @@ async def test_a_touched_file_is_read_again_without_doubling_the_counters(
     await ingest(pg)
 
     set_mtime(path, _MTIME + 10)
-    await worker_B(pg)
+    await ingest_sharelogs(pg)
     set_mtime(path, _MTIME + 20)
-    await worker_B(pg)
+    await ingest_sharelogs(pg)
 
     assert len(aggregate_calls) == 3
     rows = await weights_of(pg, pool_instance)
@@ -174,7 +174,7 @@ async def test_an_appended_file_is_read_again(pg, round_dir, pool_instance, aggr
 
     append_sharelog(path, [line(workinfoid = 10, diff = 100.0)])
     set_mtime(path, _MTIME + 10)
-    await worker_B(pg)
+    await ingest_sharelogs(pg)
 
     assert len(aggregate_calls) == 2
     (row,) = await weights_of(pg, pool_instance)
@@ -189,7 +189,7 @@ async def test_appending_a_later_share_keeps_one_row(pg, round_dir, pool_instanc
 
     append_sharelog(path, [line(workinfoid = 10, diff = 100.0, createdate = 1_700_000_900)])
     set_mtime(path, _MTIME + 10)
-    await worker_B(pg)
+    await ingest_sharelogs(pg)
 
     rows = await weights_of(pg, pool_instance)
     assert len(rows) == 1
@@ -206,7 +206,7 @@ async def test_appending_an_earlier_share_keeps_one_row(pg, round_dir, pool_inst
 
     append_sharelog(path, [line(workinfoid = 10, diff = 100.0, createdate = 1_699_999_100)])
     set_mtime(path, _MTIME + 10)
-    await worker_B(pg)
+    await ingest_sharelogs(pg)
 
     rows = await weights_of(pg, pool_instance)
     assert len(rows) == 1
@@ -225,7 +225,7 @@ async def test_a_shrunk_file_is_quarantined_without_being_written(pg, round_dir,
 
     write_sharelog(path, [line(workinfoid = 11, diff = 900.0)])
     set_mtime(path, _MTIME + 10)
-    await worker_B(pg)
+    await ingest_sharelogs(pg)
 
     settled = await file_row(pg, path, pool_instance)
     assert settled["status"] == "QUARANTINED"
@@ -240,13 +240,13 @@ async def test_a_quarantined_file_is_never_picked_up_again(
 
     write_sharelog(path, [line(workinfoid = 11, diff = 900.0)])
     set_mtime(path, _MTIME + 10)
-    await worker_B(pg)
+    await ingest_sharelogs(pg)
 
     # Le fichier regrossit au-dela de sa taille ingeree: il reste ecarte.
     append_sharelog(path, [line(workinfoid = 11, diff = 900.0) for _ in range(20)])
     set_mtime(path, _MTIME + 20)
-    await worker_A(pg)
-    await worker_B(pg)
+    await register_new_sharelogs(pg)
+    await ingest_sharelogs(pg)
 
     assert len(aggregate_calls) == 1
     assert (await file_row(pg, path, pool_instance))["status"] == "QUARANTINED"
@@ -277,7 +277,7 @@ async def test_the_pending_line_is_counted_once_completed(pg, round_dir, pool_in
 
     append_sharelog(path, [complete[cut:]])
     set_mtime(path, _MTIME + 10)
-    await worker_B(pg)
+    await ingest_sharelogs(pg)
 
     (row,) = await weights_of(pg, pool_instance)
     assert (row["diff_sum"], row["shares_ok"]) == (400.0, 2)
@@ -334,12 +334,12 @@ async def test_an_unreadable_file_is_quarantined_past_the_retry_budget(pg, round
     path = round_dir / "0.sharelog"
     _write_invalid_utf8(path)
     set_mtime(path, _MTIME)
-    await worker_A(pg)
+    await register_new_sharelogs(pg)
     await pg.execute(
         "UPDATE file SET retry_count = 3 WHERE path = $1 AND pool_instance = $2",
         str(path), pool_instance)
 
-    await worker_B(pg)
+    await ingest_sharelogs(pg)
 
     assert (await file_row(pg, path, pool_instance))["status"] == "QUARANTINED"
 
@@ -347,10 +347,10 @@ async def test_an_unreadable_file_is_quarantined_past_the_retry_budget(pg, round
 async def test_a_vanished_file_is_skipped_without_locking(pg, round_dir, pool_instance):
     path = round_dir / "0.sharelog"
     sharelog(round_dir, [line(workinfoid = 10, diff = 100.0)])
-    await worker_A(pg)
+    await register_new_sharelogs(pg)
     path.unlink()
 
-    await worker_B(pg)
+    await ingest_sharelogs(pg)
 
     assert (await file_row(pg, path, pool_instance))["status"] == "PENDING"
 
@@ -358,10 +358,10 @@ async def test_a_vanished_file_is_skipped_without_locking(pg, round_dir, pool_in
 async def test_a_lease_lost_during_the_read_writes_nothing(pg, round_dir, pool_instance,
                                                            monkeypatch):
     """Une lecture plus longue que processing_timeout_seconds se fait reprendre son
-    verrou par worker_C. Ce tick ne doit alors ni ecrire de poids, ni toucher au
+    verrou par release_processing_sharelogs. Ce tick ne doit alors ni ecrire de poids, ni toucher au
     statut: celui qui detient le verrou finira le travail."""
     path = sharelog(round_dir, [line(workinfoid = 10, diff = 100.0)])
-    await worker_A(pg)
+    await register_new_sharelogs(pg)
     original = ingestor.aggregate_sharelog
 
     async def reaped_while_reading(target):
@@ -372,7 +372,7 @@ async def test_a_lease_lost_during_the_read_writes_nothing(pg, round_dir, pool_i
 
     monkeypatch.setattr(ingestor, "aggregate_sharelog", reaped_while_reading)
 
-    await worker_B(pg)
+    await ingest_sharelogs(pg)
 
     assert await pg.fetchval(
         "SELECT count(*) FROM share_weights WHERE pool_instance = $1", pool_instance) == 0
@@ -387,7 +387,7 @@ async def test_an_unexpected_error_quarantines_past_the_retry_budget(
     fichier pathologique empeche indefiniment l'ingestion de tous ceux decouverts
     apres lui."""
     path = sharelog(round_dir, [line(workinfoid = 10, diff = 100.0)])
-    await worker_A(pg)
+    await register_new_sharelogs(pg)
     await pg.execute(
         "UPDATE file SET retry_count = $1 WHERE path = $2 AND pool_instance = $3",
         ingestor.MAX_READ_ATTEMPTS, str(path), pool_instance)
@@ -398,7 +398,7 @@ async def test_an_unexpected_error_quarantines_past_the_retry_budget(
     monkeypatch.setattr(ingestor, "aggregate_sharelog", boom)
 
     with pytest.raises(RuntimeError):
-        await worker_B(pg)
+        await ingest_sharelogs(pg)
 
     assert (await file_row(pg, path, pool_instance))["status"] == "QUARANTINED"
 
@@ -407,7 +407,7 @@ async def test_an_unexpected_error_releases_the_lock(pg, round_dir, pool_instanc
     """Sans le release, claim() ne reprenant pas un PROCESSING, le fichier ne
     serait relu qu'au prochain demarrage."""
     path = sharelog(round_dir, [line(workinfoid = 10, diff = 100.0)])
-    await worker_A(pg)
+    await register_new_sharelogs(pg)
 
     async def boom(_path):
         raise RuntimeError("boom")
@@ -415,7 +415,7 @@ async def test_an_unexpected_error_releases_the_lock(pg, round_dir, pool_instanc
     monkeypatch.setattr(ingestor, "aggregate_sharelog", boom)
 
     with pytest.raises(RuntimeError):
-        await worker_B(pg)
+        await ingest_sharelogs(pg)
 
     settled = await file_row(pg, path, pool_instance)
     assert settled["status"] == "PENDING"

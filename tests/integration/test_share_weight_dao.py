@@ -39,7 +39,7 @@ async def commit(weights, aggregates, pool_instance, path = "/logs/0000000f/a.sh
                  mtime = None, size = 100, *, lease = True):
     """Solde un sharelog.
 
-    lease = True pose d'abord le verrou que commit_sharelog exige, comme worker_B
+    lease = True pose d'abord le verrou que commit_sharelog exige, comme ingest_sharelogs
     le fait en production (register puis claim).
     """
     if lease:

@@ -48,7 +48,7 @@ async def test_a_new_file_starts_pending(files, pg, pool_instance):
 # --- get_monitored -----------------------------------------------------------
 
 async def test_get_monitored_returns_the_ingestion_state(files, pg, pool_instance):
-    """worker_B a besoin de ingested_mtime, ingested_size ET retry_count."""
+    """ingest_sharelogs a besoin de ingested_mtime, ingested_size ET retry_count."""
     await files.register(["/logs/0000000f/a.sharelog"], pool_instance)
     # Dans la fenetre: coalesce(ingested_mtime, discovered_at) est le critere.
     mtime = (datetime.now(UTC) - timedelta(hours = 1)).replace(microsecond = 0)
@@ -234,7 +234,7 @@ async def test_release_expired_unlocks_an_abandoned_claim(files, pg, pool_instan
 
 
 async def test_release_expired_keeps_a_claim_still_within_the_timeout(files, pg, pool_instance):
-    """Sinon worker_C volerait le verrou d'une ingestion en cours, et deux
+    """Sinon release_processing_sharelogs volerait le verrou d'une ingestion en cours, et deux
     lectures du meme fichier se marcheraient dessus."""
     await files.register(["/logs/0000000f/a.sharelog"], pool_instance)
     await files.claim("/logs/0000000f/a.sharelog", pool_instance)

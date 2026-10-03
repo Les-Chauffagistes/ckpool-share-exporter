@@ -111,7 +111,7 @@ async def settle_failure(files: FileDAO, sharelog: File, path: Path, pool_instan
         await files.release(path, pool_instance)
 
 
-async def worker_B(pg: asyncpg.Pool):
+async def ingest_sharelogs(pg: asyncpg.Pool):
     files = FileDAO(pg)
     weights = ShareWeightDAO(pg)
     pool_instance = settings.pool_instance_name
@@ -162,7 +162,7 @@ async def worker_B(pg: asyncpg.Pool):
         except Exception:
             # Le verrou doit tomber sur toute autre erreur aussi : claim() ne
             # reprend pas un PROCESSING, donc sans ce release le fichier ne serait
-            # relu qu'apres expiration du verrou par worker_C.
+            # relu qu'apres expiration du verrou par release_processing_sharelogs.
             #
             # Meme budget que ci-dessus, parce que l'exception interrompt le tick
             # ENTIER: un seul fichier qui echoue de facon reproductible empeche

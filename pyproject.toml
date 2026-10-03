@@ -16,3 +16,6 @@ markers = [
 filterwarnings = [
     "ignore::DeprecationWarning:testcontainers.*",
 ]
+
+[tool.pyrefly]
+search-path = ["src", "."]

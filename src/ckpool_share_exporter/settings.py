@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     # sans erreur.
     monitor_window_days: int = 16
 
-    # Au-dela, worker_C remet en PENDING un fichier reste en PROCESSING.
+    # Au-dela, release_processing_sharelogs remet en PENDING un fichier reste en PROCESSING.
     processing_timeout_seconds: int = 300
 
     model_config = {"env_file": ".env", "extra": "allow"}

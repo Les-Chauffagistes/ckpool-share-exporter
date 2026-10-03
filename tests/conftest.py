@@ -5,7 +5,7 @@ d'environnement, aucun module du projet ne s'importe. Le `.env` du depot n'est
 lu que si pytest tourne depuis la racine, on ne s'y fie donc pas et on pose des
 valeurs explicites avant tout import de code applicatif.
 
-worker_A garde ses chemins deja vus dans un set de module, qui survit donc d'un
+register_new_sharelogs garde ses chemins deja vus dans un set de module, qui survit donc d'un
 test a l'autre: sans le nettoyage de `forget_known_paths`, un tick d'un test
 precedent masque une decouverte attendue.
 """

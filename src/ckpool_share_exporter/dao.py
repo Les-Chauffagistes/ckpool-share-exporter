@@ -31,7 +31,7 @@ SET username  = excluded.username,
 """
 
 
-# DO NOTHING : worker_A ne transmet que des chemins qu'il croit nouveaux, mais son
+# DO NOTHING : register_new_sharelogs ne transmet que des chemins qu'il croit nouveaux, mais son
 # cache est vide au demarrage et ne survit pas a un redeploiement. COPY ne sait pas
 # gerer les conflits, d'ou l'INSERT.
 #
@@ -43,6 +43,7 @@ SELECT path, $2, block
 FROM unnest($1::text[], $3::text[]) AS t(path, block)
 ON CONFLICT (path, pool_instance) DO NOTHING
 """
+
 
 
 class LeaseLost(Exception):
@@ -90,7 +91,7 @@ class FileDAO:
           le dernier sharelog de l'ancien peut avoir une ecriture en vol.
 
         Sans cette distinction, un fichier ingere restait surveille pendant toute
-        la fenetre : worker_B re-stat a chaque tick des milliers de sharelogs
+        la fenetre : ingest_sharelogs re-stat a chaque tick des milliers de sharelogs
         definitivement figes.
 
         Les QUARANTINED sont exclus definitivement. La sous-requete, elle, ne
@@ -136,8 +137,11 @@ class FileDAO:
     async def quarantine(self, path: str | Path, pool_instance: str) -> None:
         await self.pg.execute(
             """UPDATE file
-               SET status = 'QUARANTINED', retry_count = coalesce(retry_count, 0) + 1, updated_at = now()
-               WHERE path = $1 AND pool_instance = $2""",
+               SET status      = 'QUARANTINED',
+                   retry_count = retry_count + 1,
+                   updated_at  = now()
+               WHERE path = $1
+                 AND pool_instance = $2""",
             str(path), pool_instance,
         )
 
@@ -146,8 +150,8 @@ class FileDAO:
 
         claim() n'accepte que PENDING et DONE: un fichier interrompu entre le claim
         et le commit (SIGTERM d'un redeploiement, OOM, kill) resterait verrouille
-        pour toujours. C'est worker_C qui le reprend, et c'est la seule mecanique:
-        un reset inconditionnel au demarrage reprendrait le fichier plus vite, mais
+        pour toujours. C'est release_processing_sharelogs qui le reprend, et c'est
+        la seule mecanique: un reset inconditionnel au demarrage reprendrait le fichier plus vite, mais
         il supposerait qu'aucun PROCESSING n'est legitime a cet instant -- faux des
         qu'un deploiement fait se recouvrir deux instances.
 
@@ -169,8 +173,12 @@ class FileDAO:
         """Remet un fichier en PENDING apres un echec transitoire."""
         await self.pg.execute(
             """UPDATE file
-               SET status = 'PENDING', retry_count = coalesce(retry_count, 0) + 1, updated_at = now()
-               WHERE path = $1 AND pool_instance = $2 AND status = 'PROCESSING'""",
+               SET status      = 'PENDING',
+                   retry_count = retry_count + 1,
+                   updated_at  = now()
+               WHERE path = $1
+                 AND pool_instance = $2
+                 AND status = 'PROCESSING'""",
             str(path), pool_instance,
         )
 
@@ -192,8 +200,8 @@ class ShareWeightDAO:
 
         Le solde exige que le fichier soit encore PROCESSING, sinon LeaseLost et
         rollback: une lecture plus longue que processing_timeout_seconds se fait
-        reprendre son verrou par worker_C, et celui qui le detient alors finira le
-        travail. Cette garde couvre un verrou relache ou mis en quarantaine, pas
+        reprendre son verrou par release_processing_sharelogs, et celui qui le
+        detient alors finira le travail. Cette garde couvre un verrou relache ou mis en quarantaine, pas
         un verrou deja re-claim par un autre processus du meme pool_instance --
         il faudrait un jeton de propriete pour cela. Avec un conteneur par node
         (mode global), le cas ne se presente pas.
@@ -204,20 +212,19 @@ class ShareWeightDAO:
              aggregate.diff_sum, aggregate.shares_ok, aggregate.shares_ko)
             for (workinfoid, workername), aggregate in aggregates.items()
         ]
-        async with self.pg.acquire() as connection:
-            async with connection.transaction():
-                if records:
-                    await connection.executemany(_UPSERT_SHARE_WEIGHTS, records)
-                settled = await connection.execute(
-                    """UPDATE file
-                       SET status = 'DONE', updated_at = now(),
-                           ingested_mtime = $3, ingested_size = $4
-                       WHERE path = $1 AND pool_instance = $2
-                         AND status = 'PROCESSING'""",
-                    str(path), pool_instance, mtime, size,
-                )
-                if settled == "UPDATE 0":
-                    raise LeaseLost(str(path))
+        async with self.pg.acquire() as connection, connection.transaction():
+            if records:
+                await connection.executemany(_UPSERT_SHARE_WEIGHTS, records)
+            settled = await connection.execute(
+                """UPDATE file
+                   SET status = 'DONE', updated_at = now(),
+                       ingested_mtime = $3, ingested_size = $4
+                   WHERE path = $1 AND pool_instance = $2
+                     AND status = 'PROCESSING'""",
+                str(path), pool_instance, mtime, size,
+            )
+            if settled == "UPDATE 0":
+                raise LeaseLost(str(path))
 
     async def distribution(
             self, username: str, pool_instance: str, window_days: int | None = None

@@ -102,7 +102,7 @@ def touch_newer(path: Path, delta: float = 10.0) -> float:
 
     La granularite du mtime est d'une seconde sur certains systemes de fichiers:
     reecrire un fichier dans la meme seconde laisse (mtime, size) inchange et
-    worker_B sauterait le fichier. os.utime evite un sleep par test.
+    ingest_sharelogs sauterait le fichier. os.utime evite un sleep par test.
     """
     new_mtime = path.stat().st_mtime + delta
     set_mtime(path, new_mtime)

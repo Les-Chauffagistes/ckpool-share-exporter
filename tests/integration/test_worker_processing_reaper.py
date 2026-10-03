@@ -1,4 +1,4 @@
-"""Reprise des verrous abandonnes (workers.processing_reaper.worker_C).
+"""Reprise des verrous abandonnes (workers.processing_reaper.release_processing_sharelogs).
 
 C'est la seule mecanique qui sort un fichier de PROCESSING sans l'avoir lu:
 claim() n'accepte que PENDING et DONE.
@@ -8,7 +8,7 @@ import pytest
 
 from ckpool_share_exporter import settings as settings_module
 from ckpool_share_exporter.dao import FileDAO
-from ckpool_share_exporter.workers.processing_reaper import worker_C
+from ckpool_share_exporter.workers.processing_reaper import release_processing_sharelogs
 
 PATH = "/logs/0000000f/a.sharelog"
 TIMEOUT_SECONDS = 300
@@ -36,30 +36,31 @@ async def status_of(pg, pool_instance):
         "SELECT status::text FROM file WHERE pool_instance = $1", pool_instance)
 
 
-async def test_worker_c_reclaims_a_lock_left_by_an_interrupted_run(
+async def test_processing_reaper_reclaims_a_lock_left_by_an_interrupted_run(
         pg, pool_instance, reaper_settings):
     """Sans cette reprise, un fichier interrompu entre le claim et le commit --
     un `docker stop` pendant une ingestion -- n'est plus jamais relu."""
     await claimed(pg, pool_instance, held_for = 10 * TIMEOUT_SECONDS)
 
-    await worker_C(pg)
+    await release_processing_sharelogs(pg)
 
     assert await status_of(pg, pool_instance) == "PENDING"
 
 
-async def test_worker_c_leaves_an_ingestion_in_progress_alone(pg, pool_instance, reaper_settings):
+async def test_processing_reaper_leaves_an_ingestion_in_progress_alone(
+        pg, pool_instance, reaper_settings):
     """Un verrou encore dans le delai appartient a une lecture en cours: le
     reprendre ferait lire le meme fichier deux fois en parallele."""
     await claimed(pg, pool_instance)
 
-    await worker_C(pg)
+    await release_processing_sharelogs(pg)
 
     assert await status_of(pg, pool_instance) == "PROCESSING"
 
 
-async def test_worker_c_is_scoped_to_its_pool_instance(pg, pool_instance, reaper_settings):
+async def test_processing_reaper_is_scoped_to_its_pool_instance(pg, pool_instance, reaper_settings):
     await claimed(pg, "another-pool", held_for = 10 * TIMEOUT_SECONDS)
 
-    await worker_C(pg)
+    await release_processing_sharelogs(pg)
 
     assert await status_of(pg, "another-pool") == "PROCESSING"

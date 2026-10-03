@@ -18,7 +18,7 @@ _REGISTER_BATCH = 4096
 # Chemins deja vus, conserves d'un tick a l'autre.
 #
 # Un sharelog n'a besoin d'etre decouvert qu'une fois: detecter ses updates est le
-# travail de worker_B. Sans ce cache, chaque tick stat les milliers de sharelogs
+# travail de ingest_sharelogs. Sans ce cache, chaque tick stat les milliers de sharelogs
 # de la fenetre pour n'en retenir aucun.
 #
 # Purement une optimisation: vide (premier tick, redeploiement), le resultat est
@@ -27,7 +27,7 @@ _REGISTER_BATCH = 4096
 _known: set[Path] = set()
 
 
-async def worker_A(pg: asyncpg.Pool):
+async def register_new_sharelogs(pg: asyncpg.Pool):
     files = FileDAO(pg)
     listed = await list_sharelogs(Path(settings.base_log_dir), settings.monitor_window_days)
     cutoff_seconds = settings.monitor_window_days * 24 * 3600

@@ -3,8 +3,8 @@
 Filesystem uniquement, pas de base.
 
 list_sharelogs ne fait que lister: le filtre sur l'age des FICHIERS appartient a
-worker_A, qui ne stat que les chemins encore inconnus. Voir
-tests/integration/test_worker_a.py.
+register_new_sharelogs, qui ne stat que les chemins encore inconnus. Voir
+tests/integration/test_worker_file_explorer.py.
 """
 
 import time
@@ -89,7 +89,7 @@ async def test_a_block_outside_the_window_is_skipped(tmp_path):
 
 async def test_an_old_sharelog_inside_a_fresh_block_is_still_listed(tmp_path):
     """Partage des responsabilites: lister est sans stat de fichier, donc un
-    sharelog hors fenetre ressort ici. C'est worker_A qui l'ecarte, et seulement
+    sharelog hors fenetre ressort ici. C'est register_new_sharelogs qui l'ecarte, et seulement
     s'il ne le connait pas deja."""
     directory = tmp_path / "0000000f"
     directory.mkdir()
