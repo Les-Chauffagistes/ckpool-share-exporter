@@ -8,6 +8,7 @@ import asyncpg
 from ckpool_share_exporter.workers.file_explorer import register_new_sharelogs
 from ckpool_share_exporter.workers.share_ingestor import ingest_sharelogs
 from ckpool_share_exporter.workers.processing_reaper import release_processing_sharelogs
+from ckpool_share_exporter.workers.pool_stat_exporter import export_pool_stat
 from ckpool_share_exporter.settings import settings
 
 
@@ -40,6 +41,7 @@ async def main():
             tg.create_task(run_forever(register_new_sharelogs, pool)),
             tg.create_task(run_forever(ingest_sharelogs, pool)),
             tg.create_task(run_forever(release_processing_sharelogs, pool, interval = 30)),
+            tg.create_task(run_forever(export_pool_stat, pool, interval = 10)),
         ]
         # SIGTERM est ce que `docker stop` envoie. Sans handler, le processus
         # meurt sur place: le pool n'est pas ferme et le fichier en cours reste

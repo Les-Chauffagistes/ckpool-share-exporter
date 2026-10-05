@@ -210,6 +210,7 @@ async def clean_tables(pg):
     """
     await pg.execute("DELETE FROM share_weights")
     await pg.execute("DELETE FROM file")
+    await pg.execute("DELETE FROM pool_stat")
     yield
 
 
