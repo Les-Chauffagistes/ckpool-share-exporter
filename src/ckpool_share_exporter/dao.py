@@ -20,16 +20,15 @@ from ckpool_share_exporter.settings import settings
 # additif et s'appuyer sur le statut du fichier comme garde d'idempotence.
 # `shares` est une colonne generee : la base la recalcule, on ne l'ecrit pas.
 _UPSERT_SHARE_WEIGHTS = """
-INSERT INTO share_weights
-    (bucket_at, pool_instance, workinfoid, username, workername, diff_sum, shares_ok, shares_ko)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-ON CONFLICT (bucket_at, pool_instance, workinfoid, workername) DO UPDATE
-SET username  = excluded.username,
-    diff_sum  = excluded.diff_sum,
-    shares_ok = excluded.shares_ok,
-    shares_ko = excluded.shares_ko
-"""
-
+                        INSERT INTO share_weights
+                        (bucket_at, pool_instance, workinfoid, username, workername, diff_sum, shares_ok, shares_ko)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                        ON CONFLICT (bucket_at, pool_instance, workinfoid, workername) DO UPDATE
+                            SET username  = excluded.username,
+                                diff_sum  = excluded.diff_sum,
+                                shares_ok = excluded.shares_ok,
+                                shares_ko = excluded.shares_ko \
+                        """
 
 # DO NOTHING : register_new_sharelogs ne transmet que des chemins qu'il croit nouveaux, mais son
 # cache est vide au demarrage et ne survit pas a un redeploiement. COPY ne sait pas
@@ -38,45 +37,44 @@ SET username  = excluded.username,
 # pool_instance reste scalaire : il est constant pour un processus, le repliquer
 # dans un troisieme tableau ne ferait que transporter la meme valeur n fois.
 _INSERT_FILES = """
-INSERT INTO file (path, pool_instance, block)
-SELECT path, $2, block
-FROM unnest($1::text[], $3::text[]) AS t(path, block)
-ON CONFLICT (path, pool_instance) DO NOTHING
-"""
-
+                INSERT INTO file (path, pool_instance, block)
+                SELECT path, $2, block
+                FROM unnest($1::text[], $3::text[]) AS t(path, block)
+                ON CONFLICT (path, pool_instance) DO NOTHING \
+                """
 
 # Remplacement: pool_stat ne garde que le dernier instantane de chaque instance,
 # sans historique.
 _UPSERT_POOL_STAT = """
-INSERT INTO pool_stat
-    (pool_instance, updated_at, runtime_s, users, workers, idle, disconnected,
-     hashrate_1m, hashrate_5m, hashrate_15m, hashrate_1h, hashrate_6h, hashrate_1d, hashrate_7d,
-     diff, accepted, rejected, bestshare, sps_1m, sps_5m, sps_15m, sps_1h)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-        $15, $16, $17, $18, $19, $20, $21, $22)
-ON CONFLICT (pool_instance) DO UPDATE
-SET updated_at   = excluded.updated_at,
-    runtime_s    = excluded.runtime_s,
-    users        = excluded.users,
-    workers      = excluded.workers,
-    idle         = excluded.idle,
-    disconnected = excluded.disconnected,
-    hashrate_1m  = excluded.hashrate_1m,
-    hashrate_5m  = excluded.hashrate_5m,
-    hashrate_15m = excluded.hashrate_15m,
-    hashrate_1h  = excluded.hashrate_1h,
-    hashrate_6h  = excluded.hashrate_6h,
-    hashrate_1d  = excluded.hashrate_1d,
-    hashrate_7d  = excluded.hashrate_7d,
-    diff         = excluded.diff,
-    accepted     = excluded.accepted,
-    rejected     = excluded.rejected,
-    bestshare    = excluded.bestshare,
-    sps_1m       = excluded.sps_1m,
-    sps_5m       = excluded.sps_5m,
-    sps_15m      = excluded.sps_15m,
-    sps_1h       = excluded.sps_1h
-"""
+                    INSERT INTO pool_stat
+                    (pool_instance, updated_at, runtime_s, users, workers, idle, disconnected,
+                     hashrate_1m, hashrate_5m, hashrate_15m, hashrate_1h, hashrate_6h, hashrate_1d, hashrate_7d,
+                     diff, accepted, rejected, bestshare, sps_1m, sps_5m, sps_15m, sps_1h)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+                            $15, $16, $17, $18, $19, $20, $21, $22)
+                    ON CONFLICT (pool_instance) DO UPDATE
+                        SET updated_at   = excluded.updated_at,
+                            runtime_s    = excluded.runtime_s,
+                            users        = excluded.users,
+                            workers      = excluded.workers,
+                            idle         = excluded.idle,
+                            disconnected = excluded.disconnected,
+                            hashrate_1m  = excluded.hashrate_1m,
+                            hashrate_5m  = excluded.hashrate_5m,
+                            hashrate_15m = excluded.hashrate_15m,
+                            hashrate_1h  = excluded.hashrate_1h,
+                            hashrate_6h  = excluded.hashrate_6h,
+                            hashrate_1d  = excluded.hashrate_1d,
+                            hashrate_7d  = excluded.hashrate_7d,
+                            diff         = excluded.diff,
+                            accepted     = excluded.accepted,
+                            rejected     = excluded.rejected,
+                            bestshare    = excluded.bestshare,
+                            sps_1m       = excluded.sps_1m,
+                            sps_5m       = excluded.sps_5m,
+                            sps_15m      = excluded.sps_15m,
+                            sps_1h       = excluded.sps_1h \
+                    """
 
 
 class LeaseLost(Exception):
@@ -132,18 +130,21 @@ class FileDAO:
         courant comme un autre et ne doit pas le faire disparaitre du classement.
         """
         rows = await self.pg.fetch(
-            """SELECT path, ingested_mtime, ingested_size,
+            """SELECT path,
+                      ingested_mtime,
+                      ingested_size,
                       coalesce(retry_count, 0) AS retry_count
                FROM file
                WHERE pool_instance = $1
                  AND status <> 'QUARANTINED'::file_status
                  AND coalesce(ingested_mtime, discovered_at) >= now() - make_interval(days => $2)
                  AND (ingested_mtime IS NULL
-                      OR block IN (SELECT block FROM file
-                                   WHERE pool_instance = $1
-                                   GROUP BY block
-                                   ORDER BY max(discovered_at) DESC
-                                   LIMIT 2))
+                   OR block IN (SELECT block
+                                FROM file
+                                WHERE pool_instance = $1
+                                GROUP BY block
+                                ORDER BY max(discovered_at) DESC
+                                LIMIT 2))
                ORDER BY discovered_at""",
             pool_instance, window_days)
         return [
@@ -159,8 +160,11 @@ class FileDAO:
         d'idempotence : celle-ci vient de la PK de share_weights.
         """
         claimed = await self.pg.fetchval(
-            """UPDATE file SET status = 'PROCESSING', updated_at = now()
-               WHERE path = $1 AND pool_instance = $2
+            """UPDATE file
+               SET status     = 'PROCESSING',
+                   updated_at = now()
+               WHERE path = $1
+                 AND pool_instance = $2
                  AND status IN ('PENDING'::file_status, 'DONE'::file_status)
                RETURNING true""",
             str(path), pool_instance,
@@ -195,8 +199,11 @@ class FileDAO:
         retry_count n'est pas incremente: ce n'est pas un echec de traitement.
         """
         released = await self.pg.execute(
-            """UPDATE file SET status = 'PENDING', updated_at = now()
-               WHERE pool_instance = $1 AND status = 'PROCESSING'
+            """UPDATE file
+               SET status     = 'PENDING',
+                   updated_at = now()
+               WHERE pool_instance = $1
+                 AND status = 'PROCESSING'
                  AND updated_at < now() - make_interval(secs => $2)""",
             pool_instance, timeout_seconds,
         )
@@ -250,9 +257,12 @@ class ShareWeightDAO:
                 await connection.executemany(_UPSERT_SHARE_WEIGHTS, records)
             settled = await connection.execute(
                 """UPDATE file
-                   SET status = 'DONE', updated_at = now(),
-                       ingested_mtime = $3, ingested_size = $4
-                   WHERE path = $1 AND pool_instance = $2
+                   SET status         = 'DONE',
+                       updated_at     = now(),
+                       ingested_mtime = $3,
+                       ingested_size  = $4
+                   WHERE path = $1
+                     AND pool_instance = $2
                      AND status = 'PROCESSING'""",
                 str(path), pool_instance, mtime, size,
             )
@@ -271,16 +281,38 @@ class ShareWeightDAO:
             window_days = settings.distribution_window_days
         return await self.pg.fetch(
             """SELECT workername,
-                      sum(diff_sum)                             AS diff_sum,
+                      sum(diff_sum)                              AS diff_sum,
                       sum(diff_sum) / sum(sum(diff_sum)) OVER () AS part,
-                      sum(shares_ok)                            AS shares_ok,
-                      sum(shares_ko)                            AS shares_ko
+                      sum(shares_ok)                             AS shares_ok,
+                      sum(shares_ko)                             AS shares_ko
                FROM share_weights_hourly
-               WHERE username = $1 AND pool_instance = $2
+               WHERE username = $1
+                 AND pool_instance = $2
                  AND hour >= now() - make_interval(days => $3)
                GROUP BY workername
                ORDER BY part DESC""",
             username, pool_instance, window_days)
+
+    async def cluster_distribution(
+            self,
+            username: str,
+            window_days: int | None = None,
+    ) -> list[asyncpg.Record]:
+        """Repartition d'une adresse sur toutes les instances du cluster."""
+        if window_days is None:
+            window_days = settings.distribution_window_days
+        return await self.pg.fetch(
+            """SELECT workername,
+                      sum(diff_sum)                              AS diff_sum,
+                      sum(diff_sum) / sum(sum(diff_sum)) OVER () AS part,
+                      sum(shares_ok)                             AS shares_ok,
+                      sum(shares_ko)                             AS shares_ko
+               FROM share_weights_hourly
+               WHERE username = $1
+                 AND hour >= now() - make_interval(days => $2)
+               GROUP BY workername
+               ORDER BY part DESC""",
+            username, window_days)
 
 
 class PoolStatDAO:

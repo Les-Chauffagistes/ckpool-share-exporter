@@ -11,8 +11,8 @@ class DistributionDAO:
     def __init__(self):
         self.call = None
 
-    async def distribution(self, username, pool_instance, window_days=None):
-        self.call = (username, pool_instance, window_days)
+    async def cluster_distribution(self, username, window_days=None):
+        self.call = (username, window_days)
         return [{
             "workername": f"{username}.rig1",
             "diff_sum": 42.0,
@@ -46,7 +46,7 @@ async def test_distribution_returns_dao_rows_and_uses_default_window(http_client
         "shares_ok": 2,
         "shares_ko": 1,
     }]
-    assert dao.call == ("bc1qminer", settings.pool_instance_name, settings.distribution_window_days)
+    assert dao.call == ("bc1qminer", settings.distribution_window_days)
 
 
 async def test_health_is_available_outside_the_versioned_api(http_client):
@@ -64,12 +64,12 @@ async def test_distribution_accepts_a_window_days_query_parameter(http_client):
     response = await client.get("/v1/distribution/bc1qminer?window_days=7")
 
     assert response.status == 200
-    assert dao.call == ("bc1qminer", settings.pool_instance_name, 7)
+    assert dao.call == ("bc1qminer", 7)
 
 
 async def test_distribution_serializes_decimal_values_as_json_numbers(http_client):
     client, dao = http_client
-    dao.distribution = async_decimal_distribution
+    dao.cluster_distribution = async_decimal_distribution
 
     response = await client.get("/v1/distribution/bc1qminer")
 
@@ -83,7 +83,7 @@ async def test_distribution_serializes_decimal_values_as_json_numbers(http_clien
     }]
 
 
-async def async_decimal_distribution(username, pool_instance, window_days=None):
+async def async_decimal_distribution(username, window_days=None):
     return [{
         "workername": f"{username}.rig1",
         "diff_sum": Decimal("12.5"),

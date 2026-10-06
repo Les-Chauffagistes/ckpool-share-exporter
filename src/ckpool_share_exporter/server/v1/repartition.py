@@ -28,9 +28,8 @@ async def distribution(request: web.Request) -> web.Response:
             raise web.HTTPBadRequest(text="window_days must be a positive integer")
 
     dao: ShareWeightDAO = request.app[SHARE_WEIGHT_DAO]
-    rows = await dao.distribution(
+    rows = await dao.cluster_distribution(
         username,
-        settings.pool_instance_name,
         window_days=window_days,
     )
     return web.json_response(

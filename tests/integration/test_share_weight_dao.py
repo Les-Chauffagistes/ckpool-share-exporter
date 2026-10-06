@@ -308,3 +308,36 @@ async def test_distribution_defaults_to_the_configured_window(weights, pool_inst
 
 async def test_an_unknown_address_has_no_distribution(weights, pool_instance):
     assert await weights.distribution(ADDRESS_B, pool_instance, window_days = 14) == []
+
+
+async def test_cluster_distribution_combines_pool_instances(weights, pool_instance):
+    await commit(weights, {
+        (1, worker_name(ADDRESS_A, "rig1")): aggregate(diff_sum = 300.0, shares_ok = 3),
+    }, pool_instance)
+    await commit(weights, {
+        (1, worker_name(ADDRESS_A, "rig2")): aggregate(diff_sum = 100.0, shares_ok = 1),
+    }, "another-node")
+
+    rows = await weights.cluster_distribution(ADDRESS_A, window_days = 1)
+
+    assert [row["workername"] for row in rows] == [
+        worker_name(ADDRESS_A, "rig1"), worker_name(ADDRESS_A, "rig2"),
+    ]
+    assert [row["part"] for row in rows] == [0.75, 0.25]
+    assert [row["shares_ok"] for row in rows] == [3, 1]
+
+
+async def test_cluster_distribution_uses_the_configured_window_by_default(weights, pool_instance):
+    await commit(weights, {
+        (1, worker_name(ADDRESS_A, "old")): aggregate(
+            bucket_at = NOW - 20 * 24 * 3600, diff_sum = 900.0, shares_ok = 9),
+    }, "another-node")
+    await commit(weights, {
+        (2, worker_name(ADDRESS_A, "recent")): aggregate(diff_sum = 100.0, shares_ok = 1),
+    }, pool_instance)
+
+    rows = await weights.cluster_distribution(ADDRESS_A)
+
+    assert [(row["workername"], row["part"]) for row in rows] == [
+        (worker_name(ADDRESS_A, "recent"), 1.0),
+    ]
