@@ -16,8 +16,7 @@ FROM python:3.13-slim AS runtime
 WORKDIR /app
 
 # Aucun paquet systeme: asyncpg parle le protocole PostgreSQL directement, il ne
-# depend pas de libpq. curl n'est plus la non plus -- il ne servait qu'au
-# HEALTHCHECK, qui visait une API /v1/health inexistante.
+# depend pas de libpq.
 RUN addgroup --system app && adduser --system --ingroup app app
 
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
@@ -33,11 +32,14 @@ COPY --chown=app:app migrations/ ./migrations/
 
 USER app
 
-# Les logs sont le seul signal de ce service (pas de healthcheck): stdout n'etant
-# pas un TTY sous Docker, sans ca il serait bufferise par blocs de 8 Kio et
+# Sans TTY sous Docker, stdout serait bufferise par blocs de 8 Kio et
 # `docker logs` resterait muet plusieurs minutes.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app/src
+
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
 
 # Forme exec SANS `exec`: `exec` est un builtin de shell, pas un binaire, et la
 # forme JSON n'invoque aucun shell -- d'ou le `executable file not found`

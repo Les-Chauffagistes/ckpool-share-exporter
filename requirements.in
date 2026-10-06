@@ -7,3 +7,4 @@ pytest
 pytest_asyncio
 pytest-cov
 testcontainers
+aiohttp
