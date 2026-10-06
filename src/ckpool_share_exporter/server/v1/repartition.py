@@ -1,8 +1,17 @@
+import json
+from decimal import Decimal
+
 from aiohttp import web
 
 from ckpool_share_exporter.dao import ShareWeightDAO
 from ckpool_share_exporter.server.v1 import SHARE_WEIGHT_DAO
 from ckpool_share_exporter.settings import settings
+
+
+def _json_default(value: object) -> float:
+    if isinstance(value, Decimal):
+        return float(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 async def distribution(request: web.Request) -> web.Response:
@@ -24,4 +33,7 @@ async def distribution(request: web.Request) -> web.Response:
         settings.pool_instance_name,
         window_days=window_days,
     )
-    return web.json_response([dict(row) for row in rows])
+    return web.json_response(
+        [dict(row) for row in rows],
+        dumps=lambda value: json.dumps(value, default=_json_default),
+    )

@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from aiohttp.test_utils import TestClient, TestServer
 import pytest
 
@@ -63,6 +65,32 @@ async def test_distribution_accepts_a_window_days_query_parameter(http_client):
 
     assert response.status == 200
     assert dao.call == ("bc1qminer", settings.pool_instance_name, 7)
+
+
+async def test_distribution_serializes_decimal_values_as_json_numbers(http_client):
+    client, dao = http_client
+    dao.distribution = async_decimal_distribution
+
+    response = await client.get("/v1/distribution/bc1qminer")
+
+    assert response.status == 200
+    assert await response.json() == [{
+        "workername": "bc1qminer.rig1",
+        "diff_sum": 12.5,
+        "part": 0.25,
+        "shares_ok": 3,
+        "shares_ko": 1,
+    }]
+
+
+async def async_decimal_distribution(username, pool_instance, window_days=None):
+    return [{
+        "workername": f"{username}.rig1",
+        "diff_sum": Decimal("12.5"),
+        "part": Decimal("0.25"),
+        "shares_ok": 3,
+        "shares_ko": 1,
+    }]
 
 
 @pytest.mark.parametrize("window_days", ["0", "-1", "not-a-number"])
