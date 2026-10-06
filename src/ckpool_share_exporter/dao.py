@@ -330,3 +330,15 @@ class PoolStatDAO:
             stat.diff, stat.accepted, stat.rejected, stat.bestshare,
             stat.SPS1m, stat.SPS5m, stat.SPS15m, stat.SPS1h,
         )
+
+    async def get_instance_stat(self, pool_instance: str):
+        return await self.pg.fetch(
+            """SELECT * FROM pool_stat WHERE pool_instance = $1""",
+            pool_instance,
+        )
+
+    async def get_cluster_stat(self):
+        return await self.pg.fetch(
+            """SELECT *
+               FROM pool_stat""",
+        )

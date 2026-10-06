@@ -11,7 +11,7 @@ from ckpool_share_exporter.workers.share_ingestor import ingest_sharelogs
 from ckpool_share_exporter.workers.processing_reaper import release_processing_sharelogs
 from ckpool_share_exporter.workers.pool_stat_exporter import export_pool_stat
 from ckpool_share_exporter.settings import settings
-from ckpool_share_exporter.dao import ShareWeightDAO
+from ckpool_share_exporter.dao import PoolStatDAO, ShareWeightDAO
 from ckpool_share_exporter.server.app import create_app
 
 
@@ -38,7 +38,7 @@ async def main():
         database = settings.db_name,
         host = settings.db_host,
     ) as pool:
-        runner = web.AppRunner(create_app(ShareWeightDAO(pool)))
+        runner = web.AppRunner(create_app(ShareWeightDAO(pool), PoolStatDAO(pool)))
         await runner.setup()
         site = web.TCPSite(runner, "0.0.0.0", 8080)
         await site.start()
