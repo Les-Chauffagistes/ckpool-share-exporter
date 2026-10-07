@@ -109,6 +109,24 @@ async def test_get_monitored_keeps_a_never_ingested_file_from_a_closed_block(
     assert len(await files.get_monitored(pool_instance, 16)) == 3
 
 
+async def test_get_monitored_keeps_a_reaped_file_from_a_closed_block(files, pg, pool_instance):
+    """Un fichier ingere, reclame puis abandonne (arret du processus) est relache
+    en PENDING par le reaper. S'il appartient deja a un bloc revolu, il doit
+    rester surveille: il a grossi depuis sa derniere ingestion."""
+    await register_in_blocks(
+        files, pg, pool_instance, ["0000000d", "0000000e", "0000000f"], ingested = True)
+    path = "/logs/0000000d/0.sharelog"
+    assert await files.claim(path, pool_instance)
+    await pg.execute(
+        "UPDATE file SET updated_at = now() - interval '10 minutes' WHERE path = $1", path)
+    assert await files.release_expired(pool_instance, 300) == 1
+
+    monitored = {str(item.path) for item in await files.get_monitored(pool_instance, 16)}
+
+    assert monitored == {
+        "/logs/0000000d/0.sharelog", "/logs/0000000e/0.sharelog", "/logs/0000000f/0.sharelog"}
+
+
 async def test_get_monitored_keeps_done_files(files, pg, pool_instance):
     """ckpool ecrit encore dans le dernier sharelog du bloc en cours: un fichier
     DONE peut avoir grossi depuis."""

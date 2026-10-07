@@ -53,6 +53,12 @@ class FileDAO:
           pour couvrir la bascule : a l'instant ou le nouveau repertoire apparait,
           le dernier sharelog de l'ancien peut avoir une ecriture en vol.
 
+        Un fichier PENDING reste surveille quel que soit son bloc. Un ingere peut
+        en effet repasser PENDING apres sa fermeture : claim() puis arret du
+        processus, et release_expired le relache. Le critere de bloc seul le
+        laisserait PENDING pour toujours, avec les shares ecrites depuis sa
+        derniere ingestion jamais lues.
+
         Sans cette distinction, un fichier ingere restait surveille pendant toute
         la fenetre : ingest_sharelogs re-stat a chaque tick des milliers de sharelogs
         definitivement figes.
@@ -71,6 +77,7 @@ class FileDAO:
                  AND status <> 'QUARANTINED'::file_status
                  AND coalesce(ingested_mtime, discovered_at) >= now() - make_interval(days => $2)
                  AND (ingested_mtime IS NULL
+                   OR status = 'PENDING'::file_status
                    OR block IN (SELECT block
                                 FROM file
                                 WHERE pool_instance = $1
