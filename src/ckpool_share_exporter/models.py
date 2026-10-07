@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Annotated, NamedTuple
 
@@ -39,6 +39,7 @@ class SharelogLine(BaseModel):
     # reellement atteinte). sdiff depasse la cible d'un facteur aleatoire a
     # queue lourde: le sommer donnerait un poids demesure aux shares chanceuses.
     diff: float
+    sdiff: float
     result: bool
     createdate: Annotated[int, BeforeValidator(_epoch_seconds)]
 
@@ -115,12 +116,15 @@ class SharelogAggregate:
 # (workinfoid, workername) : exactement la partie variable de la PK de
 # share_weights, dont les deux autres composants sont bucket_at (porte par
 # l'agregat) et pool_instance (constant pour un processus). Cet alignement est
-# ce qui rend l'upsert par remplacement de dao.py correct : deux agregats
+# ce qui rend l'upsert par remplacement du dao correct : deux agregats
 # distincts ne peuvent pas viser la meme ligne.
 #
 # workinfoid identifie le job : le bucket est la duree du job lui-meme, pas une
 # fenetre de largeur fixe. Relire le meme sharelog reconstruit donc exactement
 # les memes cles, ce qui rend le rejeu idempotent au niveau de la PK.
 ShareKey = tuple[int, str]
+# (username, premier jour du mois UTC)
+BestDiffKey = tuple[str, date]
 
 ShareWeights = dict[ShareKey, SharelogAggregate]
+MonthlyBestDiff = dict[BestDiffKey, float]

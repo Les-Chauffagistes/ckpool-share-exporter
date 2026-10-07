@@ -5,7 +5,7 @@ production.
 """
 
 import time
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -420,3 +420,30 @@ async def test_an_unexpected_error_releases_the_lock(pg, round_dir, pool_instanc
     settled = await file_row(pg, path, pool_instance)
     assert settled["status"] == "PENDING"
     assert settled["retry_count"] == 1
+
+
+# --- best diff mensuel -------------------------------------------------------
+
+async def best_of(pg):
+    return await pg.fetch('SELECT month, "user", best_diff FROM monthly_bests ORDER BY month, "user"')
+
+
+async def test_best_diff_keeps_the_highest_value_across_files_of_the_same_month(
+        pg, round_dir, pool_instance):
+    sharelog(round_dir, [line(workinfoid = 10, sdiff = 900.5, createdate = 1_700_000_000)], name = "a.sharelog")
+    await ingest(pg)
+    sharelog(round_dir, [line(workinfoid = 11, sdiff = 40.0, createdate = 1_700_000_100)], name = "b.sharelog")
+    await ingest(pg)
+
+    (row,) = await best_of(pg)
+    assert (row["month"], row["user"], row["best_diff"]) == (date(2023, 11, 1), ADDRESS_A, 900.5)
+
+
+async def test_best_diff_is_raised_by_a_later_better_share(pg, round_dir, pool_instance):
+    sharelog(round_dir, [line(workinfoid = 10, sdiff = 40.0, createdate = 1_700_000_000)], name = "a.sharelog")
+    await ingest(pg)
+    sharelog(round_dir, [line(workinfoid = 11, sdiff = 70.0, createdate = 1_700_000_100)], name = "b.sharelog")
+    await ingest(pg)
+
+    (row,) = await best_of(pg)
+    assert row["best_diff"] == 70.0

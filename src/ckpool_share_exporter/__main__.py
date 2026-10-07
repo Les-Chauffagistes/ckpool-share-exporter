@@ -11,7 +11,8 @@ from ckpool_share_exporter.workers.share_ingestor import ingest_sharelogs
 from ckpool_share_exporter.workers.processing_reaper import release_processing_sharelogs
 from ckpool_share_exporter.workers.pool_stat_exporter import export_pool_stat
 from ckpool_share_exporter.settings import settings
-from ckpool_share_exporter.dao import PoolStatDAO, ShareWeightDAO
+from ckpool_share_exporter.dao import ShareWeightDAO
+from ckpool_share_exporter.dao.PoolStat import PoolStatDAO
 from ckpool_share_exporter.server.app import create_app
 
 

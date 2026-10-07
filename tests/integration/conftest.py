@@ -211,6 +211,7 @@ async def clean_tables(pg):
     await pg.execute("DELETE FROM share_weights")
     await pg.execute("DELETE FROM file")
     await pg.execute("DELETE FROM pool_stat")
+    await pg.execute("DELETE FROM monthly_bests")
     yield
 
 
@@ -227,7 +228,7 @@ def pool_instance() -> str:
 def log_dir(tmp_path, monkeypatch, pool_instance) -> Path:
     """Branche les workers sur un arbre de logs jetable.
 
-    `settings` est un singleton instancie a l'import et partage par dao.py,
+    `settings` est un singleton instancie a l'import et partage par les daos,
     file_explorer.py et share_ingestor.py: patcher l'objet suffit.
     """
     base = tmp_path / "logs"

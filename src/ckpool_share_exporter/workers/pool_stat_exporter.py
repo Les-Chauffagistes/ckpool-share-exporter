@@ -6,7 +6,7 @@ from aiofiles import os
 from pydantic import ValidationError
 
 from chauff_cmn.logging import logger as log
-from ckpool_share_exporter.dao import PoolStatDAO
+from ckpool_share_exporter.dao.PoolStat import PoolStatDAO
 from ckpool_share_exporter.models import PoolStat
 from ckpool_share_exporter.settings import settings
 from ckpool_share_exporter.utils import read_lines

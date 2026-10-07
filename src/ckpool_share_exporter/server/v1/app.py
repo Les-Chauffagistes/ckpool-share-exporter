@@ -1,6 +1,7 @@
 from aiohttp import web
 
-from ckpool_share_exporter.dao import PoolStatDAO, ShareWeightDAO
+from ckpool_share_exporter.dao import ShareWeightDAO
+from ckpool_share_exporter.dao.PoolStat import PoolStatDAO
 from ckpool_share_exporter.server.v1 import POOL_STAT_DAO, SHARE_WEIGHT_DAO
 from ckpool_share_exporter.server.v1.repartition import distribution
 from ckpool_share_exporter.server.v1.stats import stats

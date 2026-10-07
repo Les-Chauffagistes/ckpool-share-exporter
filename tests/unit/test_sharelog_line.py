@@ -42,13 +42,12 @@ def test_createdate_accepts_a_plain_integer():
 
 
 def test_unused_fields_are_dropped():
-    """extra = "ignore": sdiff, address, agent... ne sont pas materialises."""
+    """extra = "ignore": address, agent... ne sont pas materialises."""
     parsed = SharelogLine.model_validate_json(line())
 
-    assert not hasattr(parsed, "sdiff")
     assert not hasattr(parsed, "address")
     assert set(parsed.model_dump()) == {
-        "workinfoid", "workername", "username", "diff", "result", "createdate",
+        "workinfoid", "workername", "username", "diff", "sdiff", "result", "createdate",
     }
 
 

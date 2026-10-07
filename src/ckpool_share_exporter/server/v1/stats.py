@@ -2,7 +2,7 @@ import json
 
 from aiohttp import web
 
-from ckpool_share_exporter.dao import PoolStatDAO
+from ckpool_share_exporter.dao.PoolStat import PoolStatDAO
 from ckpool_share_exporter.server.utils import _json_default
 from ckpool_share_exporter.server.v1 import POOL_STAT_DAO
 

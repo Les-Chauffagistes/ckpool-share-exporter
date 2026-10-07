@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from aiofiles import os
@@ -6,8 +6,9 @@ import asyncpg
 from pydantic import ValidationError
 
 from chauff_cmn.logging import logger as log
-from ckpool_share_exporter.dao import FileDAO, LeaseLost, ShareWeightDAO
-from ckpool_share_exporter.models import File, ShareWeights, SharelogAggregate, SharelogLine
+from ckpool_share_exporter.dao.File import FileDAO
+from ckpool_share_exporter.dao.ShareWeight import ShareWeightDAO, LeaseLost
+from ckpool_share_exporter.models import File, ShareWeights, SharelogAggregate, SharelogLine, MonthlyBestDiff
 from ckpool_share_exporter.settings import settings
 from ckpool_share_exporter.utils import read_lines
 
@@ -20,17 +21,18 @@ MAX_REJECTED_RATIO = 0.01
 MAX_READ_ATTEMPTS = 3
 
 
-async def aggregate_sharelog(path: str | Path) -> tuple[ShareWeights, int, int]:
+async def aggregate_sharelog(path: str | Path) -> tuple[ShareWeights, int, int, MonthlyBestDiff]:
     """Agrege un sharelog par (job, workername).
 
     bucket_at est le debut du job : le createdate de la PREMIERE ligne
     rencontree pour un workinfoid, pas le minimum sur l'ensemble des lignes.
     Le commentaire dans la boucle explique pourquoi.
 
-    Retourne les agregats, le nombre de lignes lues et le nombre de lignes
-    illisibles ignorees.
+    Retourne les agregats, le nombre de lignes lues, le nombre de lignes
+    illisibles ignorees et le meilleur sdiff accepte par (adresse, mois UTC).
     """
     aggregates: ShareWeights = {}
+    best_diffs: MonthlyBestDiff = {}
     read = 0
     rejected = 0
 
@@ -51,7 +53,7 @@ async def aggregate_sharelog(path: str | Path) -> tuple[ShareWeights, int, int]:
             #
             # bucket_at fait partie du PK, et TimescaleDB impose que la colonne
             # de partitionnement figure dans tout index unique: impossible de
-            # l'en retirer. Toute la strategie de remplacement de dao.py repose
+            # l'en retirer. Toute la strategie de remplacement du dao repose
             # donc sur sa stabilite d'une relecture a l'autre.
             #
             # Un minimum se deplace si une share plus ancienne apparait apres
@@ -68,10 +70,16 @@ async def aggregate_sharelog(path: str | Path) -> tuple[ShareWeights, int, int]:
         if share.result:
             aggregate.shares_ok += 1
             aggregate.diff_sum += share.diff
+            # Seules les shares acceptees comptent: une share rejetee peut
+            # afficher un sdiff enorme sans avoir ete creditee.
+            created = datetime.fromtimestamp(share.createdate, UTC)
+            best_key = (share.username, date(created.year, created.month, 1))
+            if share.sdiff > best_diffs.get(best_key, 0.0):
+                best_diffs[best_key] = share.sdiff
         else:
             aggregate.shares_ko += 1
 
-    return aggregates, read, rejected
+    return aggregates, read, rejected, best_diffs
 
 
 async def settle_failure(files: FileDAO, sharelog: File, path: Path, pool_instance: str) -> None:
@@ -125,7 +133,7 @@ async def ingest_sharelogs(pg: asyncpg.Pool):
             continue
 
         try:
-            aggregates, read, rejected = await aggregate_sharelog(path)
+            aggregates, read, rejected, best_diffs = await aggregate_sharelog(path)
         except (OSError, UnicodeDecodeError):
             # OSError est transitoire (montage NFS, rotation en cours) : le
             # release suffit. UnicodeDecodeError ne l'est PAS -- des octets
@@ -155,7 +163,8 @@ async def ingest_sharelogs(pg: asyncpg.Pool):
             log.warning(f"{rejected}/{read} unparsable lines in {path}")
 
         try:
-            await weights.commit_sharelog(aggregates, path, pool_instance, mtime, stat.st_size)
+            await weights.commit_sharelog(
+                aggregates, path, pool_instance, mtime, stat.st_size, best_diffs)
         except LeaseLost:
             # Pas une erreur: le verrou a change de main pendant la lecture et
             # rien n'a ete ecrit. Surtout pas de release ici -- il remettrait en

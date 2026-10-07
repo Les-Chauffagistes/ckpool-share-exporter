@@ -1,7 +1,8 @@
 from aiohttp import web
 from chauff_cmn.logging.aiohttp import request_logging_middleware
 
-from ckpool_share_exporter.dao import PoolStatDAO, ShareWeightDAO
+from ckpool_share_exporter.dao import ShareWeightDAO
+from ckpool_share_exporter.dao.PoolStat import PoolStatDAO
 from ckpool_share_exporter.server.v1.app import create_v1_app
 
 
