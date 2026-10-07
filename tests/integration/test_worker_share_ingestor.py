@@ -4,6 +4,7 @@ Chaque test passe par register_new_sharelogs pour enregistrer les fichiers, comm
 production.
 """
 
+import asyncio
 import time
 from datetime import UTC, date, datetime
 
@@ -420,6 +421,55 @@ async def test_an_unexpected_error_releases_the_lock(pg, round_dir, pool_instanc
     settled = await file_row(pg, path, pool_instance)
     assert settled["status"] == "PENDING"
     assert settled["retry_count"] == 1
+
+
+async def test_a_cancellation_releases_the_lock_without_counting_a_failure(
+        pg, round_dir, pool_instance, monkeypatch):
+    """SIGTERM annule la tache: CancelledError n'est pas une Exception et echappait
+    aux release. Le fichier restait PROCESSING jusqu'au reaper (300 s)."""
+    path = sharelog(round_dir, [line(workinfoid = 10, diff = 100.0)])
+    await register_new_sharelogs(pg)
+    reading = asyncio.Event()
+
+    async def stuck(_path):
+        reading.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(ingestor, "aggregate_sharelog", stuck)
+    task = asyncio.create_task(ingest_sharelogs(pg))
+    await reading.wait()
+    assert (await file_row(pg, path, pool_instance))["status"] == "PROCESSING"
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    settled = await file_row(pg, path, pool_instance)
+    assert settled["status"] == "PENDING"
+    assert settled["retry_count"] == 0
+
+
+async def test_a_cancellation_during_the_commit_releases_the_lock(
+        pg, round_dir, pool_instance, monkeypatch):
+    path = sharelog(round_dir, [line(workinfoid = 10, diff = 100.0)])
+    await register_new_sharelogs(pg)
+    committing = asyncio.Event()
+
+    async def stuck(*_args, **_kwargs):
+        committing.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(ShareWeightDAO, "commit_sharelog", stuck)
+    task = asyncio.create_task(ingest_sharelogs(pg))
+    await committing.wait()
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    settled = await file_row(pg, path, pool_instance)
+    assert settled["status"] == "PENDING"
+    assert settled["retry_count"] == 0
 
 
 # --- best diff mensuel -------------------------------------------------------

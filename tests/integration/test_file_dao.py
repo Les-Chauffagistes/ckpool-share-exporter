@@ -270,6 +270,27 @@ async def test_release_expired_does_not_touch_other_pool_instances(files, pg, po
     assert await status_of(pg, "/logs/0000000f/a.sharelog", "another-pool") == "PROCESSING"
 
 
+async def test_abandon_unlocks_without_counting_a_failure(files, pg, pool_instance):
+    await files.register(["/logs/0000000f/a.sharelog"], pool_instance)
+    await files.claim("/logs/0000000f/a.sharelog", pool_instance)
+
+    await files.abandon("/logs/0000000f/a.sharelog", pool_instance)
+
+    assert await status_of(pg, "/logs/0000000f/a.sharelog", pool_instance) == "PENDING"
+    assert await pg.fetchval(
+        "SELECT retry_count FROM file WHERE path = $1 AND pool_instance = $2",
+        "/logs/0000000f/a.sharelog", pool_instance) == 0
+
+
+async def test_abandon_leaves_a_settled_file_alone(files, pg, pool_instance):
+    await files.register(["/logs/0000000f/a.sharelog"], pool_instance)
+    await files.quarantine("/logs/0000000f/a.sharelog", pool_instance)
+
+    await files.abandon("/logs/0000000f/a.sharelog", pool_instance)
+
+    assert await status_of(pg, "/logs/0000000f/a.sharelog", pool_instance) == "QUARANTINED"
+
+
 async def test_release_expired_does_not_count_a_failed_attempt(files, pg, pool_instance):
     """Un verrou abandonne n'est pas une tentative de lecture ratee: le compter
     rapprocherait le fichier de la quarantaine sans qu'il ait jamais ete lu."""

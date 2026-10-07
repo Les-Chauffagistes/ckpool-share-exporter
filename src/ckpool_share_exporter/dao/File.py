@@ -148,6 +148,24 @@ class FileDAO:
         )
         return int(released.removeprefix("UPDATE "))
 
+    async def abandon(self, path: str | Path, pool_instance: str) -> None:
+        """Remet en PENDING un fichier dont l'ingestion est interrompue par un arret.
+
+        Contrairement a release(), retry_count n'est pas incremente: un SIGTERM
+        n'est pas un echec de lecture et ne doit pas rapprocher le fichier de la
+        quarantaine. Meme garde que release(): un fichier deja solde (DONE) ou
+        repris par quelqu'un d'autre n'est pas touche.
+        """
+        await self.pg.execute(
+            """UPDATE file
+               SET status     = 'PENDING',
+                   updated_at = now()
+               WHERE path = $1
+                 AND pool_instance = $2
+                 AND status = 'PROCESSING'""",
+            str(path), pool_instance,
+        )
+
     async def release(self, path: str | Path, pool_instance: str) -> None:
         """Remet un fichier en PENDING apres un echec transitoire."""
         await self.pg.execute(

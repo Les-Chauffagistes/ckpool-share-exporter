@@ -1,3 +1,4 @@
+from asyncio import CancelledError, shield
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -95,6 +96,16 @@ async def settle_failure(files: FileDAO, sharelog: File, path: Path, pool_instan
         await files.release(path, pool_instance)
 
 
+async def abandon_on_cancel(files: FileDAO, path: Path, pool_instance: str) -> None:
+    """Rend le verrou quand le worker est annule (SIGTERM), sans compter un echec.
+
+    CancelledError n'est pas une Exception: aucun except ci-dessous ne l'attrape, et
+    le fichier resterait PROCESSING jusqu'au reaper (processing_timeout_seconds).
+    shield: un second signal ne doit pas interrompre le relachement lui-meme.
+    """
+    await shield(files.abandon(path, pool_instance))
+
+
 async def ingest_sharelogs(pg: asyncpg.Pool):
     files = FileDAO(pg)
     weights = ShareWeightDAO(pg)
@@ -143,6 +154,9 @@ async def ingest_sharelogs(pg: asyncpg.Pool):
             log.exception(f"Cannot read {path}")
             await settle_failure(files, sharelog, path, pool_instance)
             continue
+        except CancelledError:
+            await abandon_on_cancel(files, path, pool_instance)
+            raise
         except Exception:
             # Le verrou doit tomber sur toute autre erreur aussi : claim() ne
             # reprend pas un PROCESSING, donc sans ce release le fichier ne serait
@@ -171,6 +185,11 @@ async def ingest_sharelogs(pg: asyncpg.Pool):
             # PENDING un verrou qui appartient desormais a quelqu'un d'autre.
             log.warning(f"Lease lost on {path} while reading, nothing written")
             continue
+        except CancelledError:
+            # La transaction est annulee avec la tache: si le solde n'a pas eu lieu,
+            # le fichier est encore PROCESSING. Sinon abandon() ne touche a rien.
+            await abandon_on_cancel(files, path, pool_instance)
+            raise
         except Exception:
             # Meme raison que pour la lecture: sans ce release, le fichier reste
             # PROCESSING jusqu'au reaper (processing_timeout_seconds) et le tick
