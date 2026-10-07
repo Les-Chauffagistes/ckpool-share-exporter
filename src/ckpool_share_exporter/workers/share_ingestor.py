@@ -1,8 +1,6 @@
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import AsyncGenerator
 
-import aiofiles
 from aiofiles import os
 import asyncpg
 from pydantic import ValidationError
@@ -11,6 +9,7 @@ from chauff_cmn.logging import logger as log
 from ckpool_share_exporter.dao import FileDAO, LeaseLost, ShareWeightDAO
 from ckpool_share_exporter.models import File, ShareWeights, SharelogAggregate, SharelogLine
 from ckpool_share_exporter.settings import settings
+from ckpool_share_exporter.utils import read_lines
 
 # Au-dela, le fichier n'est pas un sharelog exploitable : on le met de cote
 # plutot que d'inserer des agregats partiels.
@@ -19,29 +18,6 @@ MAX_REJECTED_RATIO = 0.01
 # Nombre de lectures en echec tolerees avant la quarantaine. Au-dela, l'echec est
 # tenu pour reproductible: le relire encore ne ferait que bloquer la file.
 MAX_READ_ATTEMPTS = 3
-
-
-async def read_lines(path: str | Path, chunk_size: int = 1 << 20) -> AsyncGenerator[str]:
-    """Lit le fichier par blocs de 1 MiB.
-
-    Iterer un handle aiofiles ligne par ligne paie un aller-retour de
-    thread-pool par ligne. Un sharelog couvre ~55 s d'activite, soit quelques Mo
-    et plusieurs milliers de lignes: c'est ce nombre d'allers-retours, pas la
-    taille du fichier, que le decoupage par blocs supprime. Le buffer ne retient
-    qu'une ligne partielle a la fois.
-    """
-    async with aiofiles.open(path, encoding="utf-8") as f:
-        pending = ""
-        while chunk := await f.read(chunk_size):
-            lines = (pending + chunk).split("\n")
-            pending = lines.pop()
-            for line in lines:
-                if line:
-                    yield line
-        # `pending` est un reliquat sans saut de ligne final: sur un log en cours
-        # d'ecriture c'est une ligne encore incomplete, pas une ligne invalide.
-        # L'ignorer evite de mettre en quarantaine un fichier vivant; elle sera
-        # lue au tick suivant, une fois terminee.
 
 
 async def aggregate_sharelog(path: str | Path) -> tuple[ShareWeights, int, int]:

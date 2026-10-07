@@ -262,7 +262,7 @@ async def test_lines_spanning_several_chunks_are_reassembled(tmp_path):
     sharelog = tmp_path / "chunked.sharelog"
     write_sharelog(sharelog, [line(workinfoid = 1, diff = 1.0) for _ in range(500)])
 
-    from ckpool_share_exporter.workers.share_ingestor import read_lines
+    from ckpool_share_exporter.utils import read_lines
 
     count = 0
     async for _ in read_lines(sharelog, chunk_size = 64):

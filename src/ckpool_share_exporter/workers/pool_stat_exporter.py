@@ -9,7 +9,7 @@ from chauff_cmn.logging import logger as log
 from ckpool_share_exporter.dao import PoolStatDAO
 from ckpool_share_exporter.models import PoolStat
 from ckpool_share_exporter.settings import settings
-from ckpool_share_exporter.workers.share_ingestor import read_lines
+from ckpool_share_exporter.utils import read_lines
 
 
 async def read_pool_stat(path: str | Path) -> PoolStat | None:
