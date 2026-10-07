@@ -171,5 +171,11 @@ async def ingest_sharelogs(pg: asyncpg.Pool):
             # PENDING un verrou qui appartient desormais a quelqu'un d'autre.
             log.warning(f"Lease lost on {path} while reading, nothing written")
             continue
+        except Exception:
+            # Meme raison que pour la lecture: sans ce release, le fichier reste
+            # PROCESSING jusqu'au reaper (processing_timeout_seconds) et le tick
+            # entier est interrompu par l'exception.
+            await settle_failure(files, sharelog, path, pool_instance)
+            raise
 
         log.debug(f"{len(aggregates)} share_weights rows from {path} ({read} shares)")

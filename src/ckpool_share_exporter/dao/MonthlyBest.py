@@ -11,4 +11,12 @@ UPSERT_MONTHLY_BESTS = """
 
 
 def monthly_best_records(diffs: MonthlyBestDiff) -> list[tuple]:
-    return [(month, user, diff) for (user, month), diff in diffs.items()]
+    """Lignes a upserter, triees par (month, user).
+
+    Le tri n'est pas cosmetique: plusieurs replicas ecrivent les memes lignes
+    (une adresse a des shares dans les sharelogs de tous les nodes). Chaque
+    upsert verrouille sa ligne jusqu'au commit; dans des ordres differents, deux
+    transactions s'attendent mutuellement (deadlock). Un ordre total commun
+    l'exclut.
+    """
+    return sorted((month, user, diff) for (user, month), diff in diffs.items())
