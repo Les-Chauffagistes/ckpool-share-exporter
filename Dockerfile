@@ -38,8 +38,13 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app/src
 
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+# La sonde est un process Python neuf a chaque controle: sous un quota CPU que le
+# worker sature (rattrapage d'un backlog), c'est lui qui rate son delai avant
+# meme de se connecter -- /health n'est alors jamais atteint, d'ou l'absence de
+# log cote serveur. D'ou : interpreteur minimal (-S -E, socket seul, pas
+# urllib/ssl), et une marge large avant de declarer le conteneur unhealthy.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
+    CMD ["python", "-S", "-E", "-c", "import socket; s = socket.create_connection(('127.0.0.1', 8080), 5); s.sendall(b'GET /health HTTP/1.0\\r\\n\\r\\n'); assert b' 200 ' in s.recv(32)"]
 
 # Forme exec SANS `exec`: `exec` est un builtin de shell, pas un binaire, et la
 # forme JSON n'invoque aucun shell -- d'ou le `executable file not found`
