@@ -19,7 +19,7 @@ async def export_user_stat(pg: asyncpg.Pool):
             user_stat_file = f"{base_path}/{user}"
             async with open(user_stat_file, "r") as f:
                 user_stat = UserStat.from_dict(loads(await f.read()))
-                await users_dao.commit_user(user, user_stat.to_database_row(user))
+                await users_dao.commit_user(settings.pool_instance_name, user, user_stat.to_database_row(user))
         except:
             log.exception("Failed to export user stat")
             continue

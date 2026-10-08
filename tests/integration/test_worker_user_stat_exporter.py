@@ -34,11 +34,13 @@ def user_stat(*, hashrate1m = "1.48T", workers = 1, shares = 2_896_444_789):
     }
 
 
-async def rows_of(pg, address):
-    return await pg.fetch("SELECT * FROM users WHERE address = $1", address)
+async def rows_of(pg, address, pool_instance):
+    return await pg.fetch(
+        "SELECT * FROM users WHERE address = $1 AND pool_instance = $2",
+        address, pool_instance)
 
 
-async def test_user_stat_is_stored_for_its_address(pg, log_dir):
+async def test_user_stat_is_stored_for_its_address(pg, log_dir, pool_instance):
     address = f"test-{uuid4().hex}"
     users_dir = log_dir / "users"
     users_dir.mkdir()
@@ -46,7 +48,8 @@ async def test_user_stat_is_stored_for_its_address(pg, log_dir):
 
     await export_user_stat(pg)
 
-    (row,) = await rows_of(pg, address)
+    (row,) = await rows_of(pg, address, pool_instance)
+    assert row["pool_instance"] == pool_instance
     assert row["hashrate1m"] == 1_480_000_000_000
     assert row["hashrate5m"] == 1_380_000_000_000
     assert row["workers"] == 1
@@ -56,7 +59,7 @@ async def test_user_stat_is_stored_for_its_address(pg, log_dir):
     assert row["authorized"].timestamp() == 1790111749
 
 
-async def test_new_user_stat_replaces_the_previous_values(pg, log_dir):
+async def test_new_user_stat_replaces_the_previous_values(pg, log_dir, pool_instance):
     address = f"test-{uuid4().hex}"
     users_dir = log_dir / "users"
     users_dir.mkdir()
@@ -70,13 +73,15 @@ async def test_new_user_stat_replaces_the_previous_values(pg, log_dir):
     )
     await export_user_stat(pg)
 
-    (row,) = await rows_of(pg, address)
+    (row,) = await rows_of(pg, address, pool_instance)
+    assert row["pool_instance"] == pool_instance
     assert row["hashrate1m"] == 2_000_000_000_000
     assert row["workers"] == 3
     assert row["shares"] == 150
 
 
-async def test_a_bad_user_file_does_not_prevent_other_users_from_exporting(pg, log_dir):
+async def test_a_bad_user_file_does_not_prevent_other_users_from_exporting(
+        pg, log_dir, pool_instance):
     users_dir = log_dir / "users"
     users_dir.mkdir()
     address = f"test-{uuid4().hex}"
@@ -85,5 +90,6 @@ async def test_a_bad_user_file_does_not_prevent_other_users_from_exporting(pg, l
 
     await export_user_stat(pg)
 
-    (row,) = await rows_of(pg, address)
+    (row,) = await rows_of(pg, address, pool_instance)
+    assert row["pool_instance"] == pool_instance
     assert row["workers"] == 1
