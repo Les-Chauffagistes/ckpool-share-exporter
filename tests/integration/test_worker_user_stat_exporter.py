@@ -6,19 +6,31 @@ from uuid import uuid4
 from ckpool_share_exporter.workers.user_stat_exporter import export_user_stat
 
 
-def user_stat(*, hashrate1m = "1.5T", workers = 2, shares = 120):
+def user_stat(*, hashrate1m = "1.48T", workers = 1, shares = 2_896_444_789):
     return {
         "hashrate1m": hashrate1m,
-        "hashrate5m": "1.4T",
-        "hashrate1hr": "1.3T",
-        "hashrate1d": "1.2T",
-        "hashrate7d": "1.1T",
-        "lastshare": 1791189501,
+        "hashrate5m": "1.38T",
+        "hashrate1hr": "1.31T",
+        "hashrate1d": "1.35T",
+        "hashrate7d": "3.81T",
+        "lastshare": 1791448721,
         "workers": workers,
         "shares": shares,
-        "bestshare": 42,
-        "authorized": 1791189400,
-        "worker": [],
+        "bestshare": 595286781.2753154,
+        "bestever": 595286781,
+        "authorised": 1790111749,
+        "worker": [{
+            "workername": "bc1qqp9zq4an6nyzhcspz2xfmkcf8rj0p6w94a5gyeu2a7rghxjhnqqsvymz5m.Hugo",
+            "hashrate1m": "1.48T",
+            "hashrate5m": "1.38T",
+            "hashrate1hr": "1.31T",
+            "hashrate1d": "1.35T",
+            "hashrate7d": "986G",
+            "lastshare": 1791448721,
+            "shares": 259738674,
+            "bestshare": 151169683.2161437,
+            "bestever": 151169683,
+        }],
     }
 
 
@@ -35,13 +47,13 @@ async def test_user_stat_is_stored_for_its_address(pg, log_dir):
     await export_user_stat(pg)
 
     (row,) = await rows_of(pg, address)
-    assert row["hashrate1m"] == 1_500_000_000_000
-    assert row["hashrate5m"] == 1_400_000_000_000
-    assert row["workers"] == 2
-    assert row["shares"] == 120
-    assert row["bestshare"] == 42
-    assert row["lastshare"].timestamp() == 1791189501
-    assert row["authorized"].timestamp() == 1791189400
+    assert row["hashrate1m"] == 1_480_000_000_000
+    assert row["hashrate5m"] == 1_380_000_000_000
+    assert row["workers"] == 1
+    assert row["shares"] == 2_896_444_789
+    assert row["bestshare"] == 595_286_781
+    assert row["lastshare"].timestamp() == 1791448721
+    assert row["authorized"].timestamp() == 1790111749
 
 
 async def test_new_user_stat_replaces_the_previous_values(pg, log_dir):
@@ -74,4 +86,4 @@ async def test_a_bad_user_file_does_not_prevent_other_users_from_exporting(pg, l
     await export_user_stat(pg)
 
     (row,) = await rows_of(pg, address)
-    assert row["workers"] == 2
+    assert row["workers"] == 1

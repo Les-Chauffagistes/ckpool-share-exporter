@@ -1,5 +1,5 @@
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import date, datetime
 from pathlib import Path
 from typing import Annotated, NamedTuple
@@ -140,8 +140,14 @@ class UserStat:
     workers: int
     shares: int
     bestshare: float
-    authorized: int
+    authorised: int
     worker: list['WorkerStat']
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'UserStat':
+        values = {field.name: data[field.name] for field in fields(cls)}
+        values["worker"] = [WorkerStat.from_dict(worker) for worker in values["worker"]]
+        return cls(**values)
 
     def to_database_row(self, address: str) -> DBModel:
         """renvoie des objets pour la base de donnees et omet le champ worker (la liste de stats par workername)"""
@@ -156,7 +162,7 @@ class UserStat:
             "workers": self.workers,
             "shares": self.shares,
             "bestshare": int(self.bestshare),
-            "authorized": datetime.fromtimestamp(self.authorized),
+            "authorized": datetime.fromtimestamp(self.authorised),
         })
 
 @dataclass(slots = True)
@@ -170,6 +176,10 @@ class WorkerStat:
     lastshare: int
     shares: int
     bestshare: float
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'WorkerStat':
+        return cls(**{field.name: data[field.name] for field in fields(cls)})
 
 # (workinfoid, workername) : exactement la partie variable de la PK de
 # share_weights, dont les deux autres composants sont bucket_at (porte par
