@@ -6,6 +6,8 @@ from typing import Annotated, NamedTuple
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
+from ckpool_share_exporter.utils import from_string_to_number
+
 
 class File(NamedTuple):
     path: Path
@@ -112,6 +114,62 @@ class SharelogAggregate:
     shares_ok: int = 0
     shares_ko: int = 0
 
+@dataclass(slots = True)
+class UserStat:
+
+    @dataclass(slots = True)
+    class DBModel:
+        address: str
+        hashrate1m: int
+        hashrate5m: int
+        hashrate1hr: int
+        hashrate1d: int
+        hashrate7d: int
+        lastshare: datetime
+        workers: int
+        shares: int
+        bestshare: int
+        authorized: datetime
+
+    hashrate1m: str
+    hashrate5m: str
+    hashrate1hr: str
+    hashrate1d: str
+    hashrate7d: str
+    lastshare: int
+    workers: int
+    shares: int
+    bestshare: float
+    authorized: int
+    worker: list['WorkerStat']
+
+    def to_database_row(self, address: str) -> DBModel:
+        """renvoie des objets pour la base de donnees et omet le champ worker (la liste de stats par workername)"""
+        return self.__class__.DBModel(**{
+            "address": address,
+            "hashrate1m": from_string_to_number(self.hashrate1m),
+            "hashrate5m": from_string_to_number(self.hashrate5m),
+            "hashrate1hr": from_string_to_number(self.hashrate1hr),
+            "hashrate1d": from_string_to_number(self.hashrate1d),
+            "hashrate7d": from_string_to_number(self.hashrate7d),
+            "lastshare": datetime.fromtimestamp(self.lastshare),
+            "workers": self.workers,
+            "shares": self.shares,
+            "bestshare": int(self.bestshare),
+            "authorized": datetime.fromtimestamp(self.authorized),
+        })
+
+@dataclass(slots = True)
+class WorkerStat:
+    workername: str
+    hashrate1m: str
+    hashrate5m: str
+    hashrate1hr: str
+    hashrate1d: str
+    hashrate7d: str
+    lastshare: int
+    shares: int
+    bestshare: float
 
 # (workinfoid, workername) : exactement la partie variable de la PK de
 # share_weights, dont les deux autres composants sont bucket_at (porte par
