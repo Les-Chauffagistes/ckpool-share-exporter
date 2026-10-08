@@ -93,3 +93,81 @@ async def test_a_bad_user_file_does_not_prevent_other_users_from_exporting(
     (row,) = await rows_of(pg, address, pool_instance)
     assert row["pool_instance"] == pool_instance
     assert row["workers"] == 1
+
+
+def worker(name, **overrides):
+    return {**user_stat()["worker"][0], "workername": name, **overrides}
+
+
+async def workers_of(pg, address, pool_instance):
+    return await pg.fetch(
+        "SELECT * FROM user_workers WHERE address = $1 AND pool_instance = $2 ORDER BY workername",
+        address, pool_instance)
+
+
+async def test_workers_are_stored_under_their_address(pg, log_dir, pool_instance):
+    address = f"test-{uuid4().hex}"
+    users_dir = log_dir / "users"
+    users_dir.mkdir()
+    stat = user_stat(workers = 2)
+    stat["worker"] = [worker(f"{address}.a"), worker(f"{address}.b", hashrate7d = "2T")]
+    (users_dir / address).write_text(json.dumps(stat), encoding = "utf-8")
+
+    await export_user_stat(pg)
+
+    first, second = await workers_of(pg, address, pool_instance)
+    assert first["workername"] == f"{address}.a"
+    assert first["hashrate7d"] == 986_000_000_000
+    assert first["shares"] == 259_738_674
+    assert first["bestshare"] == 151_169_683
+    assert first["lastshare"].timestamp() == 1791448721
+    assert second["hashrate7d"] == 2_000_000_000_000
+
+
+async def test_a_new_file_replaces_the_workers_values(pg, log_dir, pool_instance):
+    address = f"test-{uuid4().hex}"
+    users_dir = log_dir / "users"
+    users_dir.mkdir()
+    stat = user_stat()
+    stat["worker"] = [worker(f"{address}.a")]
+    (users_dir / address).write_text(json.dumps(stat), encoding = "utf-8")
+    await export_user_stat(pg)
+
+    stat["worker"] = [worker(f"{address}.a", shares = 999)]
+    (users_dir / address).write_text(json.dumps(stat), encoding = "utf-8")
+    await export_user_stat(pg)
+
+    (row,) = await workers_of(pg, address, pool_instance)
+    assert row["shares"] == 999
+
+
+async def test_unchanged_workers_are_not_rewritten(pg, log_dir, pool_instance):
+    address = f"test-{uuid4().hex}"
+    users_dir = log_dir / "users"
+    users_dir.mkdir()
+    stat = user_stat()
+    stat["worker"] = [worker(f"{address}.a")]
+    (users_dir / address).write_text(json.dumps(stat), encoding = "utf-8")
+    await export_user_stat(pg)
+    xmin = await pg.fetchval(
+        "SELECT xmin::text FROM user_workers WHERE address = $1", address)
+
+    await export_user_stat(pg)
+
+    assert xmin == await pg.fetchval(
+        "SELECT xmin::text FROM user_workers WHERE address = $1", address)
+
+
+async def test_a_duplicated_workername_does_not_fail_the_export(pg, log_dir, pool_instance):
+    address = f"test-{uuid4().hex}"
+    users_dir = log_dir / "users"
+    users_dir.mkdir()
+    stat = user_stat()
+    stat["worker"] = [worker(f"{address}.a", shares = 1), worker(f"{address}.a", shares = 2)]
+    (users_dir / address).write_text(json.dumps(stat), encoding = "utf-8")
+
+    await export_user_stat(pg)
+
+    (row,) = await workers_of(pg, address, pool_instance)
+    assert row["shares"] == 2
+    assert len(await rows_of(pg, address, pool_instance)) == 1

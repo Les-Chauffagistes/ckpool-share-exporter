@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass, fields
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, NamedTuple
 
@@ -150,7 +150,7 @@ class UserStat:
         return cls(**values)
 
     def to_database_row(self, address: str) -> DBModel:
-        """renvoie des objets pour la base de donnees et omet le champ worker (la liste de stats par workername)"""
+        """Ligne de la table users. La liste worker va dans user_workers, voir WorkerStat.to_database_row."""
         return self.__class__.DBModel(**{
             "address": address,
             "hashrate1m": from_string_to_number(self.hashrate1m),
@@ -167,6 +167,20 @@ class UserStat:
 
 @dataclass(slots = True)
 class WorkerStat:
+
+    @dataclass(slots = True)
+    class DBModel:
+        workername: str
+        address: str
+        hashrate1m: int
+        hashrate5m: int
+        hashrate1hr: int
+        hashrate1d: int
+        hashrate7d: int
+        lastshare: datetime
+        shares: int
+        bestshare: int
+
     workername: str
     hashrate1m: str
     hashrate5m: str
@@ -180,6 +194,20 @@ class WorkerStat:
     @classmethod
     def from_dict(cls, data: dict) -> 'WorkerStat':
         return cls(**{field.name: data[field.name] for field in fields(cls)})
+
+    def to_database_row(self, address: str) -> DBModel:
+        return self.__class__.DBModel(
+            workername = self.workername,
+            address = address,
+            hashrate1m = from_string_to_number(self.hashrate1m),
+            hashrate5m = from_string_to_number(self.hashrate5m),
+            hashrate1hr = from_string_to_number(self.hashrate1hr),
+            hashrate1d = from_string_to_number(self.hashrate1d),
+            hashrate7d = from_string_to_number(self.hashrate7d),
+            lastshare = datetime.fromtimestamp(self.lastshare, UTC),
+            shares = self.shares,
+            bestshare = int(self.bestshare),
+        )
 
 # (workinfoid, workername) : exactement la partie variable de la PK de
 # share_weights, dont les deux autres composants sont bucket_at (porte par
