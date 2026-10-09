@@ -7,6 +7,7 @@ from datetime import UTC, date, datetime
 
 import pytest
 
+from ckpool_share_exporter.models import MonthlyBest
 from ckpool_share_exporter.workers.share_ingestor import aggregate_sharelog
 from tests.helpers import (
     ADDRESS_A, ADDRESS_B, append_sharelog, line, share, worker_name, write_sharelog,
@@ -290,8 +291,8 @@ async def test_best_diff_is_the_highest_accepted_sdiff_per_user_and_month(sharel
     *_, bests = await aggregate_sharelog(sharelog)
 
     assert bests == {
-        (ADDRESS_A, date(2026, 9, 1)): 500.5,
-        (ADDRESS_B, date(2026, 9, 1)): 7.0,
+        (ADDRESS_A, date(2026, 9, 1)): MonthlyBest(workername=worker_name(ADDRESS_A, "GeeBeeCryptos"), best_diff=500.5),
+        (ADDRESS_B, date(2026, 9, 1)): MonthlyBest(workername=worker_name(ADDRESS_B, "GeeBeeCryptos"), best_diff=7.0),
     }
 
 
@@ -303,7 +304,7 @@ async def test_best_diff_ignores_rejected_shares(sharelog):
 
     *_, bests = await aggregate_sharelog(sharelog)
 
-    assert list(bests.values()) == [10.0]
+    assert list(bests.values()) == [MonthlyBest(workername=worker_name(ADDRESS_A, "GeeBeeCryptos"), best_diff=10.0)]
 
 
 async def test_best_diff_splits_on_the_utc_month_boundary_and_keeps_the_year(sharelog):
@@ -317,7 +318,20 @@ async def test_best_diff_splits_on_the_utc_month_boundary_and_keeps_the_year(sha
     *_, bests = await aggregate_sharelog(sharelog)
 
     assert bests == {
-        (ADDRESS_A, date(2026, 9, 1)): 1.0,
-        (ADDRESS_A, date(2026, 10, 1)): 2.0,
-        (ADDRESS_A, date(2027, 10, 1)): 3.0,
+        (ADDRESS_A, date(2026, 9, 1)): MonthlyBest(workername=worker_name(ADDRESS_A, "GeeBeeCryptos"), best_diff=1.0),
+        (ADDRESS_A, date(2026, 10, 1)): MonthlyBest(workername=worker_name(ADDRESS_A, "GeeBeeCryptos"), best_diff=2.0),
+        (ADDRESS_A, date(2027, 10, 1)): MonthlyBest(workername=worker_name(ADDRESS_A, "GeeBeeCryptos"), best_diff=3.0),
     }
+
+
+async def test_best_diff_keeps_workername_of_the_highest_accepted_share(sharelog):
+    write_sharelog(sharelog, [
+        line(sdiff=10.0, rig="first"),
+        line(sdiff=20.0, rig="winner"),
+        line(sdiff=15.0, rig="later"),
+    ])
+
+    *_, bests = await aggregate_sharelog(sharelog)
+
+    assert bests[(ADDRESS_A, date(2026, 9, 1))] == MonthlyBest(
+        workername=worker_name(ADDRESS_A, "winner"), best_diff=20.0)

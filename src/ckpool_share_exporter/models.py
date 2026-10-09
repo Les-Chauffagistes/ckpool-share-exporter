@@ -222,5 +222,11 @@ ShareKey = tuple[int, str]
 # (username, premier jour du mois UTC)
 BestDiffKey = tuple[str, date]
 
+@dataclass(slots = True)
+class MonthlyBest:
+    workername: str
+    best_diff: float
+
+
 ShareWeights = dict[ShareKey, SharelogAggregate]
-MonthlyBestDiff = dict[BestDiffKey, float]
+MonthlyBestDiff = dict[BestDiffKey, MonthlyBest]

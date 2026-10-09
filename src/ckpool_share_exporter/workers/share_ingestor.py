@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from chauff_cmn.logging import logger as log
 from ckpool_share_exporter.dao.File import FileDAO
 from ckpool_share_exporter.dao.ShareWeight import ShareWeightDAO, LeaseLost
-from ckpool_share_exporter.models import File, ShareWeights, SharelogAggregate, SharelogLine, MonthlyBestDiff
+from ckpool_share_exporter.models import File, ShareWeights, SharelogAggregate, SharelogLine, MonthlyBest, MonthlyBestDiff
 from ckpool_share_exporter.settings import settings
 from ckpool_share_exporter.utils import read_lines
 
@@ -75,8 +75,9 @@ async def aggregate_sharelog(path: str | Path) -> tuple[ShareWeights, int, int, 
             # afficher un sdiff enorme sans avoir ete creditee.
             created = datetime.fromtimestamp(share.createdate, UTC)
             best_key = (share.username, date(created.year, created.month, 1))
-            if share.sdiff > best_diffs.get(best_key, 0.0):
-                best_diffs[best_key] = share.sdiff
+            previous_best = best_diffs.get(best_key)
+            if previous_best is None or share.sdiff > previous_best.best_diff:
+                best_diffs[best_key] = MonthlyBest(workername=share.workername, best_diff=share.sdiff)
         else:
             aggregate.shares_ko += 1
 

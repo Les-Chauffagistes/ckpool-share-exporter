@@ -1,13 +1,18 @@
 from ckpool_share_exporter.models import MonthlyBestDiff
 
-# GREATEST, pas un remplacement: un mois couvre de nombreux sharelogs, chacun
-# ne connaissant que son propre meilleur. Rejouable sans effet de bord.
+# Le WHERE ne garde que les records strictement battus: un mois couvre de
+# nombreux sharelogs, chacun ne connaissant que son propre meilleur. Rejouable
+# sans effet de bord: une relecture (ou une egalite) ne reecrit pas la ligne,
+# donc updated_at reste la date du dernier changement du record. best_diff et
+# workername sont remplaces ensemble, ils decrivent le meme share.
 UPSERT_MONTHLY_BESTS = """
-                       INSERT INTO monthly_bests (month, "user", best_diff, updated_at)
-                       VALUES ($1, $2, $3, NOW())
+                       INSERT INTO monthly_bests (month, "user", best_diff, workername, updated_at)
+                       VALUES ($1, $2, $3, $4, NOW())
                        ON CONFLICT (month, "user") DO UPDATE
-                           SET best_diff = GREATEST(monthly_bests.best_diff, excluded.best_diff), 
+                           SET best_diff = excluded.best_diff,
+                               workername = excluded.workername,
                                updated_at = NOW()
+                           WHERE excluded.best_diff > monthly_bests.best_diff
                        """
 
 
@@ -20,4 +25,5 @@ def monthly_best_records(diffs: MonthlyBestDiff) -> list[tuple]:
     transactions s'attendent mutuellement (deadlock). Un ordre total commun
     l'exclut.
     """
-    return sorted((month, user, diff) for (user, month), diff in diffs.items())
+    return sorted((month, user, diff.best_diff, diff.workername)
+                  for (user, month), diff in diffs.items())

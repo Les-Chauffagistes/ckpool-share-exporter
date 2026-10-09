@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime
 import asyncpg
 
 from ckpool_share_exporter.dao import FileDAO, ShareWeightDAO
+from ckpool_share_exporter.models import MonthlyBest
 
 USERS = [f"addr{i}" for i in range(8)]
 MONTH = date(2026, 10, 1)
@@ -15,7 +16,7 @@ async def commit_best_diffs(weights, path, order, pool_instance):
     files = FileDAO(weights.pg)
     await files.register([path], pool_instance)
     await files.claim(path, pool_instance)
-    diffs = {(user, MONTH): 1.0 for user in order}
+    diffs = {(user, MONTH): MonthlyBest(workername = f"{user}.rig", best_diff = 1.0) for user in order}
     await weights.commit_sharelog(
         {}, path, pool_instance, datetime(2026, 1, 1, tzinfo = UTC), 1, diffs)
 
