@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass, fields
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, NamedTuple
 
@@ -44,6 +44,41 @@ class SharelogLine(BaseModel):
     sdiff: float
     result: bool
     createdate: Annotated[int, BeforeValidator(_epoch_seconds)]
+
+
+def _ckpool_datetime(value: object) -> object:
+    """createdate "<secondes>,<nanosecondes>" -> datetime, tronque a la microseconde (precision de timestamptz)."""
+    if isinstance(value, str):
+        seconds, _, nanos = value.partition(",")
+        return datetime.fromtimestamp(int(seconds), UTC) + timedelta(microseconds = int(nanos or 0) // 1000)
+    if isinstance(value, int):
+        return datetime.fromtimestamp(value, UTC)
+    return value
+
+
+class ShippedShare(SharelogLine):
+    """Share tel que le shipper l'expedie dans share_log.
+
+    Distinct de SharelogLine pour ne pas toucher `createdate` (secondes entieres)
+    qui sert l'ingestor: ici created_at garde la precision de ckpool.
+    """
+
+    created_at: Annotated[datetime, BeforeValidator(_ckpool_datetime)] = Field(validation_alias = "createdate")
+
+
+class ShareRow(NamedTuple):
+    """Ligne a inserer dans share_log (hors epoch, seq et pool_instance, poses par le DAO)."""
+
+    created_at: datetime
+    byte_offset: int
+    workinfoid: int | None = None
+    username: str | None = None
+    workername: str | None = None
+    diff: float | None = None
+    sdiff: float | None = None
+    result: bool | None = None
+    parse_error: bool = False
+    raw: str | None = None
 
 
 _HASHRATE_UNITS = {"": 1, "K": 10**3, "M": 10**6, "G": 10**9, "T": 10**12, "P": 10**15, "E": 10**18, "Z": 10**21}

@@ -32,7 +32,7 @@ def share(
         diff: float = 2428.0,
         sdiff: float | None = None,
         result: bool = True,
-        createdate: int = BASE_CREATEDATE,
+        createdate: int | str = BASE_CREATEDATE,
         client_ip: str = CLIENT_IP,
         **extra: Any,
 ) -> dict[str, Any]:
@@ -53,7 +53,8 @@ def share(
         "hash": "00000000000527b558f828a4b46bcc4f091e34c01124eb8046dbaa20c91ad70f",
         "result": result,
         "errn": 0,
-        "createdate": f"{createdate},909600425",
+        # Un str est pris tel quel ("<secondes>,<nanosecondes>").
+        "createdate": createdate if isinstance(createdate, str) else f"{createdate},909600425",
         "createby": "code",
         "createcode": "parse_submit",
         "createinet": "0.0.0.0:3333",

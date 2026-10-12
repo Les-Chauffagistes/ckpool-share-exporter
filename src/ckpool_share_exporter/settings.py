@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     # Au-dela, release_processing_sharelogs remet en PENDING un fichier reste en PROCESSING.
     processing_timeout_seconds: int = 300
 
+    # share_shipper: au premier deploiement (aucun curseur), True rejoue les deux
+    # blocs actifs depuis 0; False demarre a la taille courante des fichiers.
+    share_shipper_backfill: bool = False
+
+    # Marge du watermark au repos: decalage tolere entre createdate et l'ecriture
+    # effective de la ligne dans le sharelog.
+    share_shipper_margin_seconds: float = 2.0
+
     model_config = {"env_file": ".env", "extra": "allow"}
 
     @model_validator(mode = "after")

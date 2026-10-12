@@ -2,6 +2,9 @@
 
 import json
 
+import asyncpg
+import pytest
+
 from ckpool_share_exporter.settings import settings
 
 
@@ -18,7 +21,7 @@ async def test_the_migrations_apply_in_lexicographic_order(pg):
             "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
     }
 
-    assert {"file", "share_weights"} <= tables
+    assert {"file", "share_weights", "share_log", "share_seq", "share_cursor", "instance_watermark"} <= tables
 
 
 async def test_share_weights_is_a_hypertable_partitioned_on_bucket_at(pg):
@@ -123,3 +126,49 @@ async def test_the_hourly_aggregate_lags_by_one_hour_at_most(pg):
              AND hypertable_name = 'share_weights_hourly'"""))
 
     assert config["end_offset"] == "01:00:00"
+
+
+async def test_share_log_is_a_hypertable_with_its_policies(pg):
+    column = await pg.fetchval(
+        """SELECT column_name FROM timescaledb_information.dimensions
+           WHERE hypertable_name = 'share_log' AND dimension_number = 1""")
+    jobs = {
+        row["proc_name"]: config_of(row)
+        for row in await pg.fetch(
+            """SELECT proc_name, config FROM timescaledb_information.jobs
+               WHERE hypertable_name = 'share_log'""")
+    }
+
+    assert column == "created_at"
+    assert jobs["policy_compression"]["compress_after"] == "2 days"
+    assert jobs["policy_retention"]["drop_after"] == "30 days"
+
+
+async def test_share_seq_is_a_single_row_carrying_the_epoch(pg):
+    assert await pg.fetchval("SELECT count(*) FROM share_seq") == 1
+    assert await pg.fetchval("SELECT epoch FROM share_seq") == 1
+
+
+async def test_share_log_refuses_a_duplicate_share_id_instead_of_skipping_it(pg):
+    """Pas de ON CONFLICT: un doublon doit faire echouer la transaction (sinon trou dans le seq)."""
+    insert = """INSERT INTO share_log (epoch, seq, created_at, pool_instance, path, byte_offset)
+                VALUES (1, $1, '2030-01-01', 'dup', 'a/b.sharelog', 0)"""
+    await pg.execute(insert, 1)
+
+    with pytest.raises(asyncpg.UniqueViolationError):
+        await pg.execute(insert, 2)
+
+
+async def test_the_cursor_purge_job_drops_only_old_closed_cursors(pg):
+    await pg.execute(
+        """INSERT INTO share_cursor (pool_instance, path, block, closed, updated_at) VALUES
+           ('purge', 'old-closed', 'b', true,  now() - interval '31 days'),
+           ('purge', 'new-closed', 'b', true,  now() - interval '1 day'),
+           ('purge', 'old-open',   'b', false, now() - interval '31 days')""")
+
+    await pg.execute("CALL delete_expired_share_cursor_rows(0, '{}'::jsonb)")
+
+    remaining = {r["path"] for r in await pg.fetch("SELECT path FROM share_cursor WHERE pool_instance = 'purge'")}
+    assert remaining == {"new-closed", "old-open"}
+    assert await pg.fetchval(
+        "SELECT count(*) FROM timescaledb_information.jobs WHERE proc_name = 'delete_expired_share_cursor_rows'") == 1

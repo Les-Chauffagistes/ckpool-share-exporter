@@ -212,6 +212,10 @@ async def clean_tables(pg):
     await pg.execute("DELETE FROM file")
     await pg.execute("DELETE FROM pool_stat")
     await pg.execute("DELETE FROM monthly_bests")
+    await pg.execute("DELETE FROM share_log")
+    await pg.execute("DELETE FROM share_cursor")
+    await pg.execute("DELETE FROM instance_watermark")
+    await pg.execute("UPDATE share_seq SET v = 0, epoch = 1")
     yield
 
 

@@ -10,6 +10,7 @@ from ckpool_share_exporter.workers.file_explorer import register_new_sharelogs
 from ckpool_share_exporter.workers.share_ingestor import ingest_sharelogs
 from ckpool_share_exporter.workers.processing_reaper import release_processing_sharelogs
 from ckpool_share_exporter.workers.pool_stat_exporter import export_pool_stat
+from ckpool_share_exporter.workers.share_shipper import ship_shares
 from ckpool_share_exporter.settings import settings
 from ckpool_share_exporter.dao import ShareWeightDAO
 from ckpool_share_exporter.dao.PoolStat import PoolStatDAO
@@ -17,8 +18,10 @@ from ckpool_share_exporter.server.app import create_app
 from ckpool_share_exporter.workers.user_stat_exporter import export_user_stat
 
 
-async def run_forever(worker: Callable[[asyncpg.Pool], Awaitable[None]], pool: asyncpg.Pool, interval: int = 5):
-    backoff = interval
+async def run_forever(worker: Callable[[asyncpg.Pool], Awaitable[None]], pool: asyncpg.Pool, interval: float = 5):
+    # Plancher du backoff: un interval de 0.2 s ne doit pas marteler une base en panne.
+    base = max(interval, 1.0)
+    backoff = base
     while True:
         try:
             await worker(pool)
@@ -29,7 +32,7 @@ async def run_forever(worker: Callable[[asyncpg.Pool], Awaitable[None]], pool: a
             await sleep(backoff)
             backoff = min(backoff * 2, 60)
         else:
-            backoff = interval
+            backoff = base
             await sleep(interval)
 
 
@@ -52,6 +55,7 @@ async def main():
                     tg.create_task(run_forever(release_processing_sharelogs, pool, interval = 30)),
                     tg.create_task(run_forever(export_pool_stat, pool, interval = 10)),
                     tg.create_task(run_forever(export_user_stat, pool, interval = 30)),
+                    tg.create_task(run_forever(ship_shares, pool, interval = 0.2)),
                 ]
                 # SIGTERM est celui que Docker envoie. Laisser le TaskGroup se
                 # fermer normalement libere aussi l'app aiohttp et le pool.
