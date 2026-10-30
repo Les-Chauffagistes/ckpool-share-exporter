@@ -32,7 +32,7 @@ jobs:
           uv venv
           uv pip install --require-hashes --only-binary :all: -r requirements.txt
         env:
-          UV_EXTRA_INDEX_URL: http://${{ secrets.REGISTRY_USER }}:${{ secrets.PYPISERVER_PASSWORD }}@10.10.0.3:8081/simple/
+          UV_EXTRA_INDEX_URL: http://${{ secrets.REGISTRY_USER }}:${{ secrets.PYPISERVER_PASSWORD }}@172.16.0.1:8081/simple/
 
       - name: Run tests
         run: uv run pytest --cov=src --cov-report=xml
