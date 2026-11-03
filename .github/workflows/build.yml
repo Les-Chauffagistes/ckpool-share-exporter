@@ -9,7 +9,7 @@ on:
 
 jobs:
   test:
-    uses: Les-Chauffagistes/deploy/.github/workflows/test.yml@e7eee271043b9d3c3996ca06e83c2744e972be94
+    uses: Les-Chauffagistes/deploy/.github/workflows/test.yml@be3b94140650519f067162409927358ea8b0723f
     with:
       python-version: '3.13'
     secrets: inherit
@@ -18,7 +18,7 @@ jobs:
   build-push:
     if: github.event_name == 'push'
     needs: test
-    uses: Les-Chauffagistes/deploy/.github/workflows/build.yml@e7eee271043b9d3c3996ca06e83c2744e972be94
+    uses: Les-Chauffagistes/deploy/.github/workflows/build.yml@be3b94140650519f067162409927358ea8b0723f
     with:
       service-name: ckpool-share-exporter
     secrets:
